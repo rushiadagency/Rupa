@@ -1,0 +1,6 @@
+{
+  "name": "RupeeStore E-Commerce",
+  "description": "A fully functional e-commerce store with Cash on Delivery (COD), order tracking, user wishlist, profile management, and a complete admin panel for products, orders, and user directory management, with prices in Indian Rupees (₹).",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
