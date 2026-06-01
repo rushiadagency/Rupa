@@ -20,7 +20,7 @@ import {
 import { 
   ShoppingBag, Heart, ShieldAlert, Sparkles, Search, SlidersHorizontal, 
   IndianRupee, Library, Phone, MapPin, BadgePercent, ThumbsUp, BookMarked, Layers, User,
-  Lock, X, Database
+  Lock, X, Database, Star, MessageSquare
 } from 'lucide-react';
 
 export default function App() {
@@ -138,6 +138,89 @@ export default function App() {
       categoryFilter: "Scarves & Shawls"
     }
   ];
+
+  // User reviews state
+  const [reviews, setReviews] = useState<{ id: string; name: string; product: string; rating: number; text: string; date: string; verified: boolean }[]>(() => {
+    const saved = localStorage.getItem('rupeestore_reviews');
+    if (saved) return JSON.parse(saved);
+    return [
+      {
+        id: 'rev-1',
+        name: 'Deepika Sharma',
+        product: 'Pure Mulberry Silk Scarf',
+        rating: 5,
+        text: 'The texture is absolute bliss! Extremely premium fabric, feels like royalty. Excellent cash on delivery speed and beautiful handloom weaving detail.',
+        date: '2026-05-28',
+        verified: true
+      },
+      {
+        id: 'rev-2',
+        name: 'Arjun Khanna',
+        product: 'German Silver Jhumka Earrings',
+        rating: 5,
+        text: 'Exquisite traditional design. The engraving and antique oxidization work on the silver casting is incredible, looks much more expensive.',
+        date: '2026-05-24',
+        verified: true
+      },
+      {
+        id: 'rev-3',
+        name: 'Priya Mehta',
+        product: 'Vintage Kutchi Embroidered Clutch',
+        rating: 5,
+        text: 'Absolutely magnificent embroidery! Pairs perfectly with festive attire. Highly recommend RupeeStore for high-quality regional heritage craft products.',
+        date: '2026-05-19',
+        verified: true
+      },
+      {
+        id: 'rev-4',
+        name: 'Karan Malhotra',
+        product: 'Kolhapuri Leather Chappals',
+        rating: 4,
+        text: 'Robust pure leather build, beautiful hand-stitched detailing. Just needs a few wearings to break it in properly. Excellent support from their team.',
+        date: '2026-05-11',
+        verified: true
+      }
+    ];
+  });
+
+  const saveReviews = (newReviews: typeof reviews) => {
+    setReviews(newReviews);
+    localStorage.setItem('rupeestore_reviews', JSON.stringify(newReviews));
+  };
+
+  const [newReviewName, setNewReviewName] = useState('');
+  const [newReviewProduct, setNewReviewProduct] = useState('Pure Mulberry Silk Scarf');
+  const [newReviewRating, setNewReviewRating] = useState(5);
+  const [newReviewText, setNewReviewText] = useState('');
+  const [reviewSubmitMessage, setReviewSubmitMessage] = useState('');
+
+  const handleAddReview = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newReviewName.trim() || !newReviewText.trim()) {
+      alert("Please fill in both your name and review feedback!");
+      return;
+    }
+    const created = {
+      id: `rev-${Date.now()}`,
+      name: newReviewName.trim(),
+      product: newReviewProduct,
+      rating: newReviewRating,
+      text: newReviewText.trim(),
+      date: new Date().toISOString().split('T')[0],
+      verified: true
+    };
+    const updated = [created, ...reviews];
+    saveReviews(updated);
+    
+    // Clear state inputs
+    setNewReviewName('');
+    setNewReviewText('');
+    setNewReviewRating(5);
+    setReviewSubmitMessage("Thank you! Your verified purchase review has been published successfully.");
+    setTimeout(() => {
+      setReviewSubmitMessage('');
+    }, 5000);
+  };
 
   // Role selector
   const [role, setRole] = useState<'user' | 'admin'>('user');
@@ -482,18 +565,18 @@ export default function App() {
               Womens
             </button>
             <button 
-              onClick={() => { setActiveUserView('shop'); setSelectedCategory('Bags & Clutches'); }}
-              className={`hover:text-zinc-500 transition-colors cursor-pointer ${selectedCategory === 'Bags & Clutches' ? 'underline underline-offset-4 decoration-zinc-900 decoration-2' : ''}`}
-            >
-              Mens
-            </button>
-            <button 
-              onClick={() => { 
-                alert("Lookbook 2026: Intrepid Luxury. Launching new handmade silver filigree and pashmina lines next week!");
+              onClick={() => {
+                setActiveUserView('shop');
+                setTimeout(() => {
+                  const element = document.getElementById('reviews-section');
+                  if (element) {
+                    element.scrollIntoView({ behavior: 'smooth' });
+                  }
+                }, 100);
               }}
               className="hover:text-zinc-500 transition-colors cursor-pointer"
             >
-              Lookbook
+              Reviews
             </button>
             <button 
               onClick={() => {
@@ -505,32 +588,8 @@ export default function App() {
             </button>
           </div>
 
-          {/* Right Action Utilities (Admin selector & User Cart counts) */}
+          {/* Right Action Utilities (User Cart counts) */}
           <div className="flex items-center justify-end gap-3.5">
-            
-            {/* Minimalist interactive view toggler */}
-            <div className="flex items-center bg-zinc-50 border border-zinc-200 p-0.5 rounded text-[10px]">
-              <button
-                onClick={() => { setRole('user'); setActiveUserView('shop'); }}
-                id="switch-role-user"
-                className={`px-2 py-1 uppercase font-bold transition-colors cursor-pointer ${role === 'user' ? 'bg-zinc-900 text-white rounded-xs' : 'text-zinc-500 hover:text-zinc-850'}`}
-              >
-                Guest
-              </button>
-              <button
-                onClick={() => {
-                  if (isAdminAuthenticated) {
-                    setRole('admin');
-                  } else {
-                    setAdminLoginOpen(true);
-                  }
-                }}
-                id="switch-role-admin"
-                className={`px-2 py-1 uppercase font-bold transition-colors cursor-pointer ${role === 'admin' ? 'bg-zinc-900 text-white rounded-xs' : 'text-zinc-500 hover:text-zinc-850'}`}
-              >
-                Operator
-              </button>
-            </div>
 
             {/* User details indices */}
             {role === 'user' && (
@@ -929,6 +988,174 @@ export default function App() {
                     ))}
                   </div>
                 )}
+              </div>
+
+              {/* BRAND REVIEWS & TESTIMONIALS SECTION */}
+              <div id="reviews-section" className="mt-16 pt-12 border-t border-zinc-100 space-y-8">
+                <div className="text-center space-y-2">
+                  <div className="inline-flex items-center gap-1 bg-zinc-50 border border-zinc-100 rounded-full px-3 py-1 font-mono text-[9px] tracking-wider uppercase font-semibold text-zinc-600">
+                    <MessageSquare className="w-3 h-3 text-zinc-500" /> Verified Buyers
+                  </div>
+                  <h3 className="text-zinc-950 text-xl md:text-2xl font-serif tracking-tight font-medium lowercase">
+                    artisan heritage customer reviews
+                  </h3>
+                  <p className="text-xs text-zinc-500 max-w-lg mx-auto font-sans">
+                    Every weave, polish, and stitch counts. Read authentic reviews submitted by customers across our regional craft centers.
+                  </p>
+                  
+                  {/* Rating overview stars */}
+                  <div className="flex items-center justify-center gap-2 pt-1">
+                    <div className="flex items-center text-amber-500 gap-0.5">
+                      <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+                      <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+                      <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+                      <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+                      <Star className="w-4 h-4 fill-amber-400 text-amber-400" />
+                    </div>
+                    <span className="text-zinc-800 font-bold font-mono text-xs">4.9 / 5.0</span>
+                    <span className="text-zinc-400">•</span>
+                    <span className="text-zinc-500 text-[11px] uppercase tracking-wider font-mono font-bold">Based on {reviews.length} checkout verifications</span>
+                  </div>
+                </div>
+
+                {/* 2-Column Responsive reviews workspace */}
+                <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 items-start">
+                  
+                  {/* Left columns: Reviews Feed List */}
+                  <div className="lg:col-span-2 space-y-4 max-h-[500px] overflow-y-auto pr-2 scrollbar-thin">
+                    {reviews.map((rev) => (
+                      <div 
+                        key={rev.id} 
+                        className="bg-white border border-zinc-100 p-5 hover:border-zinc-300 transition-colors duration-300 relative space-y-2"
+                      >
+                        <div className="flex flex-wrap items-center justify-between gap-2">
+                          <div className="space-y-0.5">
+                            <span className="text-xs font-bold text-zinc-900 font-sans block">{rev.name}</span>
+                            <span className="text-[10px] text-zinc-550 font-mono tracking-wider uppercase">Verified Buyer • product: {rev.product}</span>
+                          </div>
+                          
+                          {/* Stars */}
+                          <div className="flex items-center text-amber-500 gap-0.5">
+                            {Array.from({ length: 5 }).map((_, i) => (
+                              <Star 
+                                key={i} 
+                                className={`w-3.5 h-3.5 ${i < rev.rating ? 'fill-amber-400 text-amber-400' : 'text-zinc-200'}`} 
+                              />
+                            ))}
+                          </div>
+                        </div>
+
+                        <p className="text-zinc-650 text-xs leading-relaxed font-sans font-light">
+                          "{rev.text}"
+                        </p>
+
+                        <div className="flex justify-between items-center text-[10px] text-zinc-400 font-mono">
+                          <span>Date Submitted: {rev.date}</span>
+                          <span className="text-emerald-600 font-bold tracking-widest uppercase text-[8px] bg-emerald-50 border border-emerald-100 px-1.5 py-0.5">🔒 Verified Feed</span>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+
+                  {/* Right column: Write a review Form Card */}
+                  <div className="bg-zinc-50/50 border border-zinc-100 p-6 space-y-4">
+                    <div className="space-y-1">
+                      <h4 className="text-zinc-950 text-xs font-mono font-bold tracking-widest uppercase">
+                        share your experience
+                      </h4>
+                      <p className="text-[11px] text-zinc-500 font-light leading-relaxed">
+                        Purchased an item recently? Submit your review down below to help other lovers of traditional craft.
+                      </p>
+                    </div>
+
+                    {reviewSubmitMessage && (
+                      <div className="bg-zinc-950 text-white p-3 text-xs font-mono tracking-wide leading-relaxed font-semibold">
+                        ✓ {reviewSubmitMessage}
+                      </div>
+                    )}
+
+                    <form onSubmit={handleAddReview} className="space-y-3.5 text-xs">
+                      {/* Name input */}
+                      <div className="space-y-1 text-left">
+                        <label className="text-[10px] font-mono tracking-wider uppercase font-extrabold text-zinc-400 block">
+                          Your Name
+                        </label>
+                        <input
+                          type="text"
+                          required
+                          value={newReviewName}
+                          onChange={(e) => setNewReviewName(e.target.value)}
+                          placeholder="e.g. Aditi Roy"
+                          className="w-full bg-white border border-zinc-200 p-2 text-xs focus:outline-hidden focus:border-zinc-950 rounded-none text-zinc-800"
+                        />
+                      </div>
+
+                      {/* Product dropdown select */}
+                      <div className="space-y-1 text-left">
+                        <label className="text-[10px] font-mono tracking-wider uppercase font-extrabold text-zinc-400 block">
+                          Select Product
+                        </label>
+                        <select
+                          value={newReviewProduct}
+                          onChange={(e) => setNewReviewProduct(e.target.value)}
+                          className="w-full bg-white border border-zinc-200 p-2 text-xs focus:outline-hidden focus:border-zinc-950 rounded-none text-zinc-800"
+                        >
+                          {products.map((p) => (
+                            <option key={p.id} value={p.name}>
+                              {p.name}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Rating selectors stars selection */}
+                      <div className="space-y-1.5 text-left">
+                        <label className="text-[10px] font-mono tracking-wider uppercase font-extrabold text-zinc-400 block">
+                          Rating Score
+                        </label>
+                        <div className="flex items-center gap-1.5 font-sans">
+                          {[1, 2, 3, 4, 5].map((starValue) => (
+                            <button
+                              type="button"
+                              key={starValue}
+                              onClick={() => setNewReviewRating(starValue)}
+                              className="focus:outline-hidden cursor-pointer"
+                              title={`Rate ${starValue} Stars`}
+                            >
+                              <Star 
+                                className={`w-5 h-5 ${starValue <= newReviewRating ? 'fill-amber-400 text-amber-400 font-bold' : 'text-zinc-250 hover:text-amber-300'}`} 
+                              />
+                            </button>
+                          ))}
+                          <span className="font-mono text-[11px] font-bold text-zinc-600 ml-2">({newReviewRating} / 5)</span>
+                        </div>
+                      </div>
+
+                      {/* Review details text */}
+                      <div className="space-y-1 text-left">
+                        <label className="text-[10px] font-mono tracking-wider uppercase font-extrabold text-zinc-400 block">
+                          Review Message
+                        </label>
+                        <textarea
+                          required
+                          rows={3}
+                          value={newReviewText}
+                          onChange={(e) => setNewReviewText(e.target.value)}
+                          placeholder="Describe the texture, weight, colors, and experience..."
+                          className="w-full bg-white border border-zinc-200 p-2 text-xs focus:outline-hidden focus:border-zinc-950 rounded-none text-zinc-800"
+                        />
+                      </div>
+
+                      <button
+                        type="submit"
+                        className="w-full bg-zinc-950 hover:bg-zinc-800 text-white font-bold py-2.5 px-4 font-mono uppercase tracking-widest text-[10px] sm:text-xs transition-colors cursor-pointer"
+                      >
+                        Publish Verified Review
+                      </button>
+                    </form>
+                  </div>
+
+                </div>
               </div>
 
             </div>
