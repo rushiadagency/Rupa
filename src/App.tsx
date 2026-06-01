@@ -7,12 +7,34 @@ import { UserDashboard } from './components/UserDashboard';
 import { AdminPanel } from './components/AdminPanel';
 import { ProductDetailsModal } from './components/ProductDetailsModal';
 import { 
+  testSupabaseConnection,
+  fetchProducts,
+  fetchOrders,
+  fetchUsers,
+  upsertProduct,
+  deleteProductFromDb,
+  upsertOrder,
+  upsertUser,
+  deleteUserFromDb
+} from './supabaseService';
+import { 
   ShoppingBag, Heart, ShieldAlert, Sparkles, Search, SlidersHorizontal, 
   IndianRupee, Library, Phone, MapPin, BadgePercent, ThumbsUp, BookMarked, Layers, User,
-  Lock, X
+  Lock, X, Database
 } from 'lucide-react';
 
 export default function App() {
+  // Supabase State Logger
+  const [dbState, setDbState] = useState<{
+    loading: boolean;
+    connected: boolean | null;
+    message: string;
+  }>({
+    loading: true,
+    connected: null,
+    message: 'Testing connection to Supabase...'
+  });
+
   // Load States from Local Storage or load seed defaults
   const [products, setProducts] = useState<Product[]>(() => {
     const saved = localStorage.getItem('rupeestore_products');
@@ -41,10 +63,81 @@ export default function App() {
     return saved ? JSON.parse(saved) : [];
   });
 
+  // Fetch Supabase records asynchronously on page mount
+  useEffect(() => {
+    async function initSupabaseData() {
+      // Test connectivity
+      const status = await testSupabaseConnection();
+      setDbState({
+        loading: false,
+        connected: status.connected,
+        message: status.message
+      });
+
+      // Fetch products, orders, and users from live Supabase Tables
+      try {
+        const dbProducts = await fetchProducts();
+        setProducts(dbProducts);
+
+        const dbOrders = await fetchOrders();
+        setOrders(dbOrders);
+
+        const dbUsers = await fetchUsers();
+        setUsers(dbUsers);
+
+        // Adjust active user profile sequence
+        const savedUser = localStorage.getItem('rupeestore_current_user');
+        if (savedUser) {
+          try {
+            const parsed = JSON.parse(savedUser);
+            setCurrentUser(parsed);
+          } catch (_) {
+            if (dbUsers.length > 0) setCurrentUser(dbUsers[0]);
+          }
+        } else if (dbUsers.length > 0) {
+          setCurrentUser(dbUsers[0]);
+        }
+      } catch (err) {
+        console.warn("Async Supabase syncing warning:", err);
+      }
+    }
+
+    initSupabaseData();
+  }, []);
+
   const [wishlist, setWishlist] = useState<string[]>(() => {
     const saved = localStorage.getItem('rupeestore_wishlist');
     return saved ? JSON.parse(saved) : [];
   });
+
+  // Carousel/Slide configuration for RupeeStore Theme
+  const [carouselIndex, setCarouselIndex] = useState(0);
+  const HERO_SLIDES = [
+    {
+      tag: "#style2026",
+      title: "new arrivals",
+      description: "It has roots in a piece of classical Latin literature from 45 BC.",
+      image: "https://images.unsplash.com/photo-1469334031218-e382a71b716b?q=80&w=1400&auto=format&fit=crop",
+      linkText: "EXPLORE NOW",
+      categoryFilter: "All"
+    },
+    {
+      tag: "#jewelscraft",
+      title: "fine artifacts",
+      description: "Intricately designed traditional Indian handcrafted gold jewelry art.",
+      image: "https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?q=80&w=1200&auto=format&fit=crop",
+      linkText: "SHOP JEWELRY",
+      categoryFilter: "Jewelry"
+    },
+    {
+      tag: "#heritagezari",
+      title: "luxury scarves",
+      description: "Premium pure zari, wool, and hand-embroidered heritage pashminas.",
+      image: "https://images.unsplash.com/photo-1601924994987-69e26d50dc26?q=80&w=1200&auto=format&fit=crop",
+      linkText: "DISCOVER WEAVES",
+      categoryFilter: "Scarves & Shawls"
+    }
+  ];
 
   // Role selector
   const [role, setRole] = useState<'user' | 'admin'>('user');
@@ -164,7 +257,7 @@ export default function App() {
   };
 
   // Place Call on Delivery Order
-  const handlePlaceOrder = (shippingAddress: string, contactPhone: string) => {
+  const handlePlaceOrder = async (shippingAddress: string, contactPhone: string) => {
     if (!currentUser || cart.length === 0) return;
 
     // Build unique ID
@@ -198,58 +291,94 @@ export default function App() {
     };
 
     // Safe inventory subtraction
-    setProducts((prevProducts) =>
-      prevProducts.map((p) => {
-        const cartMatch = cart.find((c) => c.productId === p.id);
-        if (cartMatch) {
-          return {
-            ...p,
-            stock: Math.max(0, p.stock - cartMatch.quantity),
-          };
-        }
-        return p;
-      })
-    );
+    const updatedProducts = products.map((p) => {
+      const cartMatch = cart.find((c) => c.productId === p.id);
+      if (cartMatch) {
+        return {
+          ...p,
+          stock: Math.max(0, p.stock - cartMatch.quantity),
+        };
+      }
+      return p;
+    });
 
+    setProducts(updatedProducts);
     setOrders((prev) => [newOrder, ...prev]);
     setCart([]); // Clear cart
+
+    // Sync to Supabase in parallel
+    upsertOrder(newOrder).then(ok => {
+      if (!ok) console.warn("Supabase failed: could not write order record");
+    });
+    
+    for (const p of updatedProducts) {
+      const cartMatch = cart.find((c) => c.productId === p.id);
+      if (cartMatch) {
+         upsertProduct(p).catch(console.error);
+      }
+    }
   };
 
   // Admin Actions
-  const handleAddProduct = (newProduct: Product) => {
+  const handleAddProduct = async (newProduct: Product) => {
     setProducts((prev) => [newProduct, ...prev]);
+    const ok = await upsertProduct(newProduct);
+    if (!ok) console.warn("Supabase failed: could not add product");
   };
 
-  const handleUpdateProduct = (updatedProduct: Product) => {
+  const handleUpdateProduct = async (updatedProduct: Product) => {
     setProducts((prev) => prev.map((p) => (p.id === updatedProduct.id ? updatedProduct : p)));
+    const ok = await upsertProduct(updatedProduct);
+    if (!ok) console.warn("Supabase failed: could not update product");
   };
 
-  const handleDeleteProduct = (productId: string) => {
+  const handleDeleteProduct = async (productId: string) => {
     setProducts((prev) => prev.filter((p) => p.id !== productId));
     setCart((prev) => prev.filter((c) => c.productId !== productId));
     setWishlist((prev) => prev.filter((id) => id !== productId));
+    const ok = await deleteProductFromDb(productId);
+    if (!ok) console.warn("Supabase failed: could not delete product");
   };
 
-  const handleUpdateOrderStatus = (orderId: string, status: OrderStatus) => {
-    setOrders((prev) => prev.map((o) => (o.id === orderId ? { ...o, status } : o)));
+  const handleUpdateOrderStatus = async (orderId: string, status: OrderStatus) => {
+    let targetOrder: Order | null = null;
+    setOrders((prev) => prev.map((o) => {
+      if (o.id === orderId) {
+        targetOrder = { ...o, status };
+        return targetOrder;
+      }
+      return o;
+    }));
+    
+    setTimeout(() => {
+      if (targetOrder) {
+        upsertOrder(targetOrder).then(ok => {
+          if (!ok) console.warn("Supabase failed: could not update order status");
+        });
+      }
+    }, 50);
   };
 
-  const handleUpdateUserProfile = (updatedUser: UserProfile) => {
+  const handleUpdateUserProfile = async (updatedUser: UserProfile) => {
     // Check if modifying current user
     if (currentUser && currentUser.id === updatedUser.id) {
       setCurrentUser(updatedUser);
     }
     setUsers((prev) => prev.map((u) => (u.id === updatedUser.id ? updatedUser : u)));
+    const ok = await upsertUser(updatedUser);
+    if (!ok) console.warn("Supabase failed: could not update user profile");
   };
 
-  const handleDeleteUserProfile = (userId: string) => {
+  const handleDeleteUserProfile = async (userId: string) => {
     if (currentUser && currentUser.id === userId) {
       setCurrentUser(null);
     }
     setUsers((prev) => prev.filter((u) => u.id !== userId));
+    const ok = await deleteUserFromDb(userId);
+    if (!ok) console.warn("Supabase failed: could not delete user");
   };
 
-  const handleResetDatabase = () => {
+  const handleResetDatabase = async () => {
     localStorage.removeItem('rupeestore_products');
     localStorage.removeItem('rupeestore_orders');
     localStorage.removeItem('rupeestore_users');
@@ -263,7 +392,19 @@ export default function App() {
     setCart([]);
     setWishlist([]);
     setActiveUserView('shop');
-    alert('Local database re-seeded successfully back to 15 standard products and template records!');
+    
+    alert('Local database reset. Refreshing Supabase records with starting presets...');
+    
+    if (dbState.connected) {
+      try {
+        for (const p of INITIAL_PRODUCTS) await upsertProduct(p);
+        for (const u of INITIAL_USERS) await upsertUser(u);
+        for (const o of INITIAL_ORDERS) await upsertOrder(o);
+        alert('Supabase connected database fully synchronized with default presets!');
+      } catch (e) {
+        console.error("Upsert seed error:", e);
+      }
+    }
   };
 
   // Dynamic Filtering logic
@@ -292,68 +433,166 @@ export default function App() {
   };
 
   return (
-    <div id="applet-container" className="min-h-screen bg-slate-50 font-sans text-slate-900 selection:bg-indigo-600 selection:text-white antialiased flex flex-col justify-between">
+    <div id="applet-container" className="min-h-screen bg-white font-sans text-zinc-900 selection:bg-zinc-950 selection:text-white antialiased flex flex-col justify-between">
       
-      {/* Dynamic Promotion Ribbons */}
-      <div className="bg-gradient-to-r from-teal-900 via-indigo-900 to-slate-900 text-white text-[11px] py-2 px-4 font-mono text-center flex items-center justify-center gap-2 relative">
-        <BadgePercent className="w-4 h-4 text-emerald-400 shrink-0" />
-        <span>FAST FESTIVAL VALUE: Free COD Courier Delivery for all local receipts above ₹1,500!</span>
+      {/* Promos strip - Neutral Elegant luxury look */}
+      <div className="bg-zinc-100 text-zinc-700 text-[9px] tracking-widest uppercase font-bold py-2.5 px-4 text-center border-b border-zinc-200">
+        ✨ FAST FESTIVAL VALUE: Free COD Courier Delivery for all local receipts above ₹1,500!
       </div>
 
       {/* Main Header navigation */}
-      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/80 shadow-xs px-4 py-3 md:px-8">
-        <div className="max-w-7xl mx-auto flex items-center justify-between gap-4">
+      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-zinc-100 px-4 py-4 md:px-8">
+        <div className="max-w-7xl mx-auto flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           
-          {/* Logo Brand */}
-          <div className="flex items-center gap-2">
-            <div className="w-9 h-9 rounded-xl bg-indigo-600 flex items-center justify-center text-white shadow-xs">
-              <Sparkles className="w-5 h-5 fill-indigo-200" />
-            </div>
-            <div>
-              <h1 id="brand-title" className="text-sm md:text-base font-extrabold tracking-tight text-slate-900 font-sans">
+          {/* Brand logo matching handwritten signature Antom */}
+          <div className="flex items-center gap-3">
+            <button 
+              onClick={() => { setActiveUserView('shop'); setSelectedCategory('All'); }}
+              className="text-left cursor-pointer group"
+            >
+              <h1 id="brand-title" className="text-3xl md:text-4xl font-signature text-zinc-950 tracking-wide transition-opacity group-hover:opacity-75">
                 RupeeStore
               </h1>
-              <span className="text-[9px] uppercase font-bold tracking-wider text-slate-400 block -mt-1 font-mono">
+              <span className="text-[8px] uppercase tracking-widest font-extrabold text-zinc-400 block -mt-1 font-mono">
                 Indian Crafts & Essentials
               </span>
-            </div>
+            </button>
+            <span className="hidden sm:inline text-zinc-200">|</span>
+            <span className="hidden sm:inline text-[9px] bg-zinc-50 border border-zinc-200 text-zinc-500 font-bold tracking-widest font-mono px-2 py-0.5">RupeeStore Premium</span>
           </div>
 
-          {/* Role Switching Interactive Widget */}
-          <div className="flex items-center border border-slate-200 bg-slate-100 rounded-xl p-1 gap-1">
-            <button
-              onClick={() => {
-                setRole('user');
-                setActiveUserView('shop');
-              }}
-              id="switch-role-user"
-              className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                role === 'user'
-                  ? 'bg-white text-slate-900 shadow-xs'
-                  : 'text-slate-500 hover:text-slate-800'
-              }`}
+          {/* Centered navigation menu list mirroring reference image */}
+          <div className="flex flex-wrap items-center justify-center gap-6 text-[11px] font-bold tracking-widest uppercase text-zinc-800 border-y lg:border-y-0 py-2 lg:py-0 border-zinc-100">
+            <button 
+              onClick={() => { setActiveUserView('shop'); setSelectedCategory('All'); }}
+              className={`hover:text-zinc-500 transition-colors cursor-pointer ${selectedCategory === 'All' && activeUserView === 'shop' ? 'underline underline-offset-4 decoration-zinc-900 decoration-2' : ''}`}
             >
-              <Library className="w-3.5 h-3.5 text-indigo-500" />
-              <span>Customer View</span>
+              Home
             </button>
-            <button
-              onClick={() => {
-                if (isAdminAuthenticated) {
-                  setRole('admin');
-                } else {
-                  setAdminLoginOpen(true);
-                }
-              }}
-              id="switch-role-admin"
-              className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
-                role === 'admin'
-                  ? 'bg-white text-slate-900 shadow-xs animate-pulse'
-                  : 'text-slate-500 hover:text-slate-800'
-              }`}
+            <button 
+              onClick={() => { setActiveUserView('shop'); setSelectedCategory('All'); }}
+              className={`hover:text-zinc-500 transition-colors cursor-pointer ${activeUserView === 'shop' ? 'underline underline-offset-4 decoration-zinc-900 decoration-2' : ''}`}
             >
-              <ShieldAlert className="w-3.5 h-3.5 text-rose-500" />
-              <span>Admin Console</span>
+              Shop
             </button>
+            <button 
+              onClick={() => { setActiveUserView('shop'); setSelectedCategory('Jewelry'); }}
+              className={`hover:text-zinc-500 transition-colors cursor-pointer ${selectedCategory === 'Jewelry' ? 'underline underline-offset-4 decoration-zinc-900 decoration-2' : ''}`}
+            >
+              Womens
+            </button>
+            <button 
+              onClick={() => { setActiveUserView('shop'); setSelectedCategory('Bags & Clutches'); }}
+              className={`hover:text-zinc-500 transition-colors cursor-pointer ${selectedCategory === 'Bags & Clutches' ? 'underline underline-offset-4 decoration-zinc-900 decoration-2' : ''}`}
+            >
+              Mens
+            </button>
+            <button 
+              onClick={() => { 
+                alert("Lookbook 2026: Intrepid Luxury. Launching new handmade silver filigree and pashmina lines next week!");
+              }}
+              className="hover:text-zinc-500 transition-colors cursor-pointer"
+            >
+              Lookbook
+            </button>
+            <button 
+              onClick={() => {
+                alert("RupeeStore Bulletin: Read our story on sustainable embroidery weavers from regional Himachal & Kutch!");
+              }}
+              className="hover:text-zinc-500 transition-colors cursor-pointer"
+            >
+              Blog
+            </button>
+          </div>
+
+          {/* Right Action Utilities (Admin selector & User Cart counts) */}
+          <div className="flex items-center justify-end gap-3.5">
+            
+            {/* Minimalist interactive view toggler */}
+            <div className="flex items-center bg-zinc-50 border border-zinc-200 p-0.5 rounded text-[10px]">
+              <button
+                onClick={() => { setRole('user'); setActiveUserView('shop'); }}
+                id="switch-role-user"
+                className={`px-2 py-1 uppercase font-bold transition-colors cursor-pointer ${role === 'user' ? 'bg-zinc-900 text-white rounded-xs' : 'text-zinc-500 hover:text-zinc-850'}`}
+              >
+                Guest
+              </button>
+              <button
+                onClick={() => {
+                  if (isAdminAuthenticated) {
+                    setRole('admin');
+                  } else {
+                    setAdminLoginOpen(true);
+                  }
+                }}
+                id="switch-role-admin"
+                className={`px-2 py-1 uppercase font-bold transition-colors cursor-pointer ${role === 'admin' ? 'bg-zinc-900 text-white rounded-xs' : 'text-zinc-500 hover:text-zinc-850'}`}
+              >
+                Operator
+              </button>
+            </div>
+
+            {/* User details indices */}
+            {role === 'user' && (
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => {
+                    if (activeUserView === 'shop') {
+                      if (currentUser) {
+                        setActiveUserView('dashboard');
+                      } else {
+                        alert('Please simulate profile select below to load custom accounts.');
+                      }
+                    } else {
+                      setActiveUserView('shop');
+                    }
+                  }}
+                  id="toggle-shop-view"
+                  title="My Premium Account Dashboard"
+                  className={`p-1.5 hover:bg-zinc-100 transition-colors relative rounded ${activeUserView === 'dashboard' ? 'text-zinc-950 bg-zinc-100 font-bold' : 'text-zinc-500'}`}
+                >
+                  <User className="w-4 h-4 cursor-pointer" />
+                </button>
+
+                {/* Wishlist summaries */}
+                <button
+                  onClick={() => {
+                    if (currentUser) {
+                      setActiveUserView('dashboard');
+                      setTimeout(() => {
+                        const tabWishlist = document.getElementById('tab-wishlist');
+                        if (tabWishlist) tabWishlist.click();
+                      }, 50);
+                    } else {
+                      alert('Select profile at the bottom of the page to access active saves.');
+                    }
+                  }}
+                  className="p-1.5 hover:bg-zinc-100 transition-colors relative text-zinc-500 rounded"
+                  title={`${wishlist.length} Items Saved`}
+                >
+                  <Heart className="w-4 h-4 text-zinc-800" />
+                  {wishlist.length > 0 && (
+                    <span className="absolute -top-1 -right-1 px-1.5 bg-zinc-900 text-white text-[8px] font-bold rounded-full font-mono">
+                      {wishlist.length}
+                    </span>
+                  )}
+                </button>
+
+                {/* Shopping bag totals */}
+                <button
+                  onClick={() => setCartOpen(true)}
+                  id="header-cart-btn"
+                  className="p-1.5 hover:bg-zinc-100 transition-colors relative text-zinc-950 flex items-center gap-1 active:scale-95 rounded"
+                >
+                  <ShoppingBag className="w-4 h-4" />
+                  <span className="border-l border-zinc-200 pl-1.5 text-xs font-bold font-mono">
+                    {cartItemCount}
+                  </span>
+                </button>
+              </div>
+            )}
+
+            {/* Lock/Unlock Admin authorization session */}
             {isAdminAuthenticated && (
               <button
                 onClick={() => {
@@ -362,91 +601,14 @@ export default function App() {
                   setActiveUserView('shop');
                   alert('Admin session signed out successfully.');
                 }}
-                className="text-[10px] font-bold text-rose-600 hover:text-rose-800 bg-rose-50 hover:bg-rose-100 border border-rose-200/50 px-2 py-1 rounded-lg cursor-pointer"
+                className="text-[9px] uppercase font-bold text-red-650 bg-red-50 hover:bg-red-100 border border-red-200/50 px-2 py-0.5 rounded cursor-pointer"
                 title="De-authenticate admin authorization"
               >
-                Sign Out Admin
+                Lock App
               </button>
             )}
+
           </div>
-
-          {/* Shopping utilities / User Session Indicators */}
-          {role === 'user' && (
-            <div className="flex items-center gap-2">
-              
-              {/* Go to Active Storefront or account */}
-              <button
-                onClick={() => {
-                  if (activeUserView === 'shop') {
-                    if (currentUser) {
-                      setActiveUserView('dashboard');
-                    } else {
-                      alert('Please login/select one profile to access user dashboard.');
-                    }
-                  } else {
-                    setActiveUserView('shop');
-                  }
-                }}
-                id="toggle-shop-view"
-                className={`flex items-center gap-1.5 px-3 py-2 text-xs font-semibold rounded-xl border transition-all ${
-                  activeUserView === 'dashboard'
-                    ? 'border-indigo-200 bg-indigo-50 text-indigo-700'
-                    : 'border-slate-200 hover:bg-slate-50 text-slate-750 bg-white'
-                }`}
-              >
-                {activeUserView === 'dashboard' ? (
-                  <>
-                    <Library className="w-3.5 h-3.5" />
-                    <span>Back to Shop</span>
-                  </>
-                ) : (
-                  <>
-                    <User className="w-3.5 h-3.5 text-indigo-600" />
-                    <span>{currentUser ? currentUser.name.split(' ')[0] : 'My Account'}</span>
-                  </>
-                )}
-              </button>
-
-              {/* Wishlist summary count */}
-              <button
-                onClick={() => {
-                  if (currentUser) {
-                    setActiveUserView('dashboard');
-                    // wait for react cycle
-                    setTimeout(() => {
-                      const tabWishlist = document.getElementById('tab-wishlist');
-                      if (tabWishlist) tabWishlist.click();
-                    }, 50);
-                  } else {
-                    alert('Log in to see saves.');
-                  }
-                }}
-                className="p-2 bg-slate-50 hover:bg-slate-100 rounded-xl relative border border-slate-100 text-slate-600"
-                title={`${wishlist.length} items wishlisted`}
-              >
-                <Heart className="w-4 h-4 text-rose-500" />
-                {wishlist.length > 0 && (
-                  <span className="absolute -top-1 px-1 min-w-[16px] text-[8px] font-bold text-center -right-1 text-white bg-rose-600 rounded-full">
-                    {wishlist.length}
-                  </span>
-                )}
-              </button>
-
-              {/* Shopping bag totals */}
-              <button
-                onClick={() => setCartOpen(true)}
-                id="header-cart-btn"
-                className="flex items-center gap-1.5 px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white font-semibold rounded-xl text-xs shadow-sm transition-all relative active:scale-95"
-              >
-                <ShoppingBag className="w-4 h-4" />
-                <span>Cart</span>
-                <span className="bg-white/20 px-1.5 py-0.5 rounded text-[10px] font-bold font-mono">
-                  {cartItemCount}
-                </span>
-              </button>
-
-            </div>
-          )}
 
         </div>
       </header>
@@ -469,6 +631,7 @@ export default function App() {
             onUpdateUserProfile={handleUpdateUserProfile}
             onDeleteUserProfile={handleDeleteUserProfile}
             onResetDatabase={handleResetDatabase}
+            dbState={dbState}
           />
 
         ) : (
@@ -527,60 +690,179 @@ export default function App() {
                 </div>
               )}
 
-              {/* Curated Visual Promo Hero Banner */}
-              <div className="relative rounded-3xl overflow-hidden bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-950 text-white min-h-[220px] p-6 md:p-12 flex flex-col justify-center shadow-lg border border-slate-800">
-                <div className="absolute inset-0 opacity-15 overflow-hidden">
-                  <div className="absolute inset-y-0 right-0 w-1/2 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-indigo-300 via-purple-700 to-transparent"></div>
-                </div>
+              {/* Curated Interactive Carousel Slider matching the Antom reference image layout */}
+              <div className="relative overflow-hidden bg-zinc-50 border border-zinc-100 min-h-[350px] md:min-h-[420px] flex items-center shadow-xs animate-fade-in">
                 
-                <div className="max-w-md relative z-10 space-y-3.5">
-                  <div className="inline-flex items-center gap-1 bg-white/10 border border-white/10 rounded-full px-3 py-1 font-mono text-[10px] tracking-wider uppercase font-semibold text-emerald-300">
-                    <Sparkles className="w-3.5 h-3.5" /> Authenticated Local Bazaar
-                  </div>
-                  <h2 className="text-xl md:text-3xl font-extrabold tracking-tight font-sans">
-                    Handmade Indian Heritage
+                {/* Background Image of active slide */}
+                <div className="absolute inset-0 w-full h-full md:w-2/3 lg:w-1/2 overflow-hidden bg-cover bg-center transition-all duration-700" style={{ backgroundImage: `url(${HERO_SLIDES[carouselIndex].image})` }}>
+                  <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-zinc-50 md:from-transparent"></div>
+                </div>
+
+                {/* Left & Right Custom Chevron Slider Buttons */}
+                <div className="absolute left-4 top-1/2 -translate-y-1/2 z-20">
+                  <button 
+                    onClick={() => setCarouselIndex((prev) => (prev === 0 ? HERO_SLIDES.length - 1 : prev - 1))}
+                    className="w-10 h-10 bg-zinc-950 text-white flex items-center justify-center hover:bg-zinc-800 transition-colors cursor-pointer"
+                    title="Previous Slide"
+                  >
+                    &lt;
+                  </button>
+                </div>
+                <div className="absolute right-4 top-1/2 -translate-y-1/2 z-20">
+                  <button 
+                    onClick={() => setCarouselIndex((prev) => (prev === HERO_SLIDES.length - 1 ? 0 : prev + 1))}
+                    className="w-10 h-10 bg-white border border-zinc-200 text-zinc-900 flex items-center justify-center hover:bg-zinc-100 transition-colors cursor-pointer"
+                    title="Next Slide"
+                  >
+                    &gt;
+                  </button>
+                </div>
+
+                {/* Typography Information Overlaid of slide on the Right details slot */}
+                <div className="w-full md:w-1/2 ml-auto p-8 md:p-14 md:pr-16 relative z-10 space-y-4 text-left md:block">
+                  <span className="text-zinc-500 font-mono text-xs tracking-widest block font-bold">
+                    {HERO_SLIDES[carouselIndex].tag}
+                  </span>
+                  
+                  <h2 className="text-3xl md:text-5xl font-serif font-medium text-zinc-950 tracking-tight leading-tight lowercase">
+                    {HERO_SLIDES[carouselIndex].title}
                   </h2>
-                  <p className="text-slate-300 text-xs md:text-sm font-medium leading-relaxed">
-                    Explore 15 distinct artisanal apparel ranges, premium accessories, and organic ayurvedic selections. Prices range strictly between ₹500 and ₹1,000 for local collection accessibility.
+                  
+                  <p className="text-zinc-650 text-xs md:text-sm max-w-sm leading-relaxed font-sans font-light">
+                    {HERO_SLIDES[carouselIndex].description}
                   </p>
-                  <div className="flex items-center gap-2 pt-2 text-[11px] text-slate-400 font-mono">
-                    <span className="flex items-center gap-1 text-emerald-400">✅ Cash On Delivery</span>
-                    <span>•</span>
-                    <span>✅ Live Admin Management</span>
+                  
+                  <div className="pt-4">
+                    <button
+                      onClick={() => {
+                        const targetCat = HERO_SLIDES[carouselIndex].categoryFilter;
+                        setSelectedCategory(targetCat);
+                        // Safe scroll focus
+                        const element = document.getElementById('our-products-section');
+                        if (element) {
+                          element.scrollIntoView({ behavior: 'smooth' });
+                        }
+                      }}
+                      className="bg-zinc-950 hover:bg-zinc-850 text-white font-bold uppercase tracking-widest text-[10px] sm:text-xs py-3 px-8 transition-colors cursor-pointer shadow-xs"
+                    >
+                      {HERO_SLIDES[carouselIndex].linkText}
+                    </button>
                   </div>
+                </div>
+
+                {/* Numeric Slide indices dots indicators underneath */}
+                <div className="absolute bottom-4 right-1/2 translate-x-1/2 flex gap-2 z-20">
+                  {HERO_SLIDES.map((_, idx) => (
+                    <button 
+                      key={idx}
+                      onClick={() => setCarouselIndex(idx)}
+                      className={`w-2.5 h-2.5 rounded-full transition-colors ${carouselIndex === idx ? 'bg-zinc-950' : 'bg-zinc-200'}`}
+                    />
+                  ))}
                 </div>
               </div>
 
-              {/* Filtering Controls Panel */}
-              <div className="bg-white border border-slate-150 rounded-2xl p-4 shadow-xs flex flex-wrap items-center justify-between gap-4">
+              {/* Sub-Header text welcoming customer */}
+              <div className="pt-8 text-center">
+                <p className="font-serif italic text-zinc-800 text-[15px] md:text-lg">
+                  Welcome to <span className="font-signature text-2xl md:text-3xl text-zinc-950 not-italic font-semibold mx-1">RupeeStore</span>!
+                </p>
+              </div>
+
+              {/* Three-Column Promotion Banners Grid matching reference layout */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
                 
-                {/* Free Search Text */}
-                <div className="relative flex-grow min-w-[240px]">
-                  <span className="absolute left-3.5 top-2.5 text-slate-400">
+                {/* Left Card: model image with white overlaid tag of newdenim */}
+                <div className="relative aspect-square md:aspect-auto md:h-76 overflow-hidden bg-zinc-50 border border-zinc-100 group">
+                  <img 
+                    src="https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=600&auto=format&fit=crop" 
+                    alt="new collection streetwear models" 
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full object-cover object-center transition-transform duration-700 group-hover:scale-105"
+                  />
+                  <div className="absolute inset-0 bg-black/5 opacity-40"></div>
+                  <div className="absolute bottom-6 left-1/2 -translate-x-1/12 transform -translate-x-1/2 z-10">
+                    <span className="bg-white text-zinc-950 text-[10px] font-bold tracking-widest uppercase px-5 py-2 whitespace-nowrap shadow-xs">
+                      #newdenim
+                    </span>
+                  </div>
+                </div>
+
+                {/* Center Column Card: Get 70% voucher code with clean details */}
+                <div className="bg-zinc-50 border border-zinc-100 p-6 md:p-8 flex flex-col justify-center items-center text-center space-y-4 md:h-76">
+                  <div className="space-y-1">
+                    <span className="text-[10px] text-zinc-400 font-mono tracking-widest uppercase block">Exclusive Discount Offer</span>
+                    <h3 className="text-3xl md:text-4xl font-sans font-bold text-zinc-950 tracking-tight">
+                      Get 70%
+                    </h3>
+                    <p className="text-[11px] text-zinc-550 max-w-[200px] leading-relaxed mx-auto">
+                      Classical Latin literature from 45 BC.
+                    </p>
+                  </div>
+                  
+                  <button 
+                    onClick={() => {
+                      alert("FLASH BOUTIQUE COUPON ACTIVE: Use checkout coupon code 'RUPEE70' to save flat amounts on heritage bundles.");
+                    }}
+                    className="bg-zinc-950 hover:bg-zinc-850 text-white font-bold uppercase tracking-widest text-[10px] py-2.5 px-6 transition-colors cursor-pointer"
+                  >
+                    EXPORE NOW
+                  </button>
+                </div>
+
+                {/* Right Card: lookbook design card with orange style background */}
+                <div className="relative aspect-square md:aspect-auto md:h-76 overflow-hidden bg-zinc-100 border border-zinc-100 group">
+                  <img 
+                    src="https://images.unsplash.com/photo-1529139574466-a303027c1d8b?q=80&w=600&auto=format&fit=crop" 
+                    alt="heritage lookbook designs chic" 
+                    referrerPolicy="no-referrer"
+                    className="w-full h-full object-cover object-center transition-transform duration-700 group-hover:scale-105"
+                  />
+                  <div className="absolute inset-0 bg-amber-500/5 opacity-30"></div>
+                  <div className="absolute bottom-6 left-1/2 -translate-x-1/12 transform -translate-x-1/2 z-10">
+                    <span className="bg-white text-zinc-950 text-[10px] font-bold tracking-widest uppercase px-5 py-2 whitespace-nowrap shadow-xs">
+                      #lookbook19
+                    </span>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* OUR PRODUCTS section separator header */}
+              <div id="our-products-section" className="text-center pt-8 border-t border-zinc-100">
+                <h3 className="text-zinc-950 text-lg md:text-xl font-bold uppercase tracking-widest font-sans">
+                  OUR PRODUCTS
+                </h3>
+                <div className="w-10 h-0.5 bg-zinc-950 mx-auto mt-2.5"></div>
+              </div>
+
+              {/* Streamlined Monochrome Filtering Controls Panel */}
+              <div className="bg-white border border-zinc-100 p-4 flex flex-col md:flex-row items-center justify-between gap-4">
+                
+                {/* Search Text Input */}
+                <div className="relative w-full md:w-80 shrink-0">
+                  <span className="absolute left-3.5 top-2.5 text-zinc-400">
                     <Search className="w-4 h-4" />
                   </span>
                   <input
                     type="text"
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="w-full pl-9 pr-4 py-1.5 border border-slate-200 focus:outline-hidden focus:ring-1 focus:ring-indigo-500 rounded-xl bg-white text-xs text-slate-800"
-                    placeholder="Search by product names or materials..."
+                    className="w-full pl-9 pr-4 py-1.5 border border-zinc-200 focus:outline-hidden focus:border-zinc-950 text-xs text-zinc-800 rounded-none bg-zinc-50/50"
+                    placeholder="Filter catalog products..."
                   />
                 </div>
 
-                {/* Categories filtering bubble select */}
-                <div className="flex flex-wrap gap-1.5 items-center">
-                  <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 mr-2 flex items-center gap-1">
-                    <SlidersHorizontal className="w-3.5 h-3.5" /> Category:
-                  </span>
+                {/* Categories tab select */}
+                <div className="flex flex-wrap gap-1 items-center justify-center">
                   {categories.map((cat) => (
                     <button
                       key={cat}
                       onClick={() => setSelectedCategory(cat)}
-                      className={`text-xs px-3 py-1 rounded-full border transition-colors ${
+                      className={`text-xs px-3.5 py-1.5 transition-colors uppercase font-mono tracking-wider cursor-pointer ${
                         selectedCategory === cat
-                          ? 'bg-indigo-600 text-white border-indigo-600 font-semibold'
-                          : 'bg-slate-50 hover:bg-slate-100 text-slate-650 border-slate-200'
+                          ? 'bg-zinc-950 text-white font-bold'
+                          : 'bg-zinc-50 hover:bg-zinc-100 text-zinc-650'
                       }`}
                     >
                       {cat}
@@ -588,11 +870,11 @@ export default function App() {
                   ))}
                 </div>
 
-                {/* Price range filter (₹500 - ₹1000) */}
-                <div className="flex items-center gap-3 border-l border-slate-100 pl-4">
-                  <div className="text-xs">
-                    <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-0.5">Budget Limit</span>
-                    <span className="font-mono font-bold text-indigo-700">Under ₹{maxPrice}</span>
+                {/* Price budget restrict slider */}
+                <div className="flex items-center gap-3 shrink-0">
+                  <div className="text-right text-xs">
+                    <span className="text-[9px] uppercase tracking-widest text-zinc-400 block mb-0.5 font-bold">Limit budget</span>
+                    <span className="font-mono font-bold text-zinc-950">Under ₹{maxPrice}</span>
                   </div>
                   <input
                     type="range"
@@ -601,7 +883,7 @@ export default function App() {
                     step="20"
                     value={maxPrice}
                     onChange={(e) => setMaxPrice(Number(e.target.value))}
-                    className="w-24 md:w-32 accent-indigo-600 h-1.5 bg-slate-100 rounded-lg cursor-pointer"
+                    className="w-20 md:w-28 accent-zinc-950 h-1 bg-zinc-100 rounded-none cursor-pointer"
                   />
                 </div>
 
@@ -611,10 +893,10 @@ export default function App() {
               <div>
                 <div className="flex items-end justify-between mb-5">
                   <div>
-                    <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400">Curated Indian Women's Accessories</h3>
-                    <p className="text-xs text-gray-500 mt-0.5">Showing {filteredProducts.length} premium products in native Rupee rates</p>
+                    <h3 className="text-xs uppercase tracking-widest text-zinc-400 font-bold">Luxury Regional Selections</h3>
+                    <p className="text-xs text-zinc-500 mt-0.5">Showing {filteredProducts.length} certified items</p>
                   </div>
-                  <span className="text-[10px] text-gray-400 font-mono">Prices within ₹500 - ₹1,000</span>
+                  <span className="text-[9px] text-zinc-400 uppercase tracking-wider font-mono">Premium Range ₹500 - ₹1,000</span>
                 </div>
 
                 {filteredProducts.length === 0 ? (
@@ -685,20 +967,20 @@ export default function App() {
         />
       )}
 
-      {/* Footer bar */}
-      <footer className="bg-slate-900 text-white mt-12 py-8 border-t border-slate-800">
-        <div className="max-w-7xl mx-auto px-4 md:px-8 flex flex-col md:flex-row items-center justify-between gap-6 text-xs text-slate-400">
+      {/* Footer bar styled in neutral pitch black */}
+      <footer className="bg-zinc-950 text-zinc-450 mt-16 py-12 border-t border-zinc-900 font-sans">
+        <div className="max-w-7xl mx-auto px-4 md:px-8 flex flex-col md:flex-row items-center justify-between gap-6 text-xs">
           
           <div className="space-y-1">
-            <p className="font-sans font-bold text-white text-sm">RupeeStore E-Commerce Ltd.</p>
-            <p className="leading-relaxed text-[11px]">Sustainably curated regional clothing items, home decors, and organic personal beauty selections.</p>
-            <p className="font-mono text-[10px] text-zinc-500">Local GMT time context: 2026-05-29 | Powered by React and local database simulation.</p>
+            <p className="font-serif font-bold text-white text-sm">RupeeStore Premium</p>
+            <p className="leading-relaxed text-[11px] text-zinc-500">Sustainably curated regional clothing items, fine jewelry, and organic heritage selections.</p>
+            <p className="font-mono text-[9px] text-zinc-650">Local GMT time context: 2026 | Powered by React and local database simulation.</p>
           </div>
 
           {/* Admin Login Portal Link and Credentials */}
-          <div className="flex flex-col items-center md:items-end gap-1.5 bg-slate-850 p-3 rounded-2xl border border-slate-800">
-            <div className="flex items-center gap-1.5 text-slate-300">
-              <Lock className="w-3.5 h-3.5 text-amber-500" />
+          <div className="flex flex-col items-center md:items-end gap-1.5 bg-zinc-900 p-3 border border-zinc-800">
+            <div className="flex items-center gap-1.5 text-zinc-300">
+              <Lock className="w-3.5 h-3.5 text-zinc-400 animate-pulse" />
               <button
                 onClick={() => {
                   if (isAdminAuthenticated) {
@@ -708,21 +990,17 @@ export default function App() {
                   }
                 }}
                 id="footer-admin-login-link"
-                className="text-xs font-bold text-indigo-400 hover:text-indigo-300 hover:underline cursor-pointer"
+                className="text-xs font-bold text-zinc-300 hover:text-white hover:underline cursor-pointer"
               >
                 Admin Portal Login
               </button>
             </div>
-            <div className="text-[10px] text-slate-400 font-mono text-center md:text-right leading-tight">
-              User: <span className="font-semibold text-slate-300">admin@rupeestore.com</span><br />
-              Pass: <span className="font-semibold text-slate-300">welcomeadmin@55</span>
-            </div>
           </div>
 
-          <div className="flex flex-wrap gap-4 text-slate-300 font-medium">
-            <span className="flex items-center gap-1">🟢 Genuine Cash on Delivery</span>
+          <div className="flex flex-wrap gap-4 text-zinc-400 font-medium text-[11px] tracking-wider uppercase font-mono">
+            <span className="flex items-center gap-1">🟢 Cash on Delivery</span>
             <span>•</span>
-            <span className="flex items-center gap-1">🛡️ Admin Secure Console</span>
+            <span className="flex items-center gap-1">🛡️ Admin Console</span>
           </div>
 
         </div>
@@ -795,27 +1073,7 @@ export default function App() {
                 />
               </div>
 
-              {/* Quick credential filler for demo environment comfort */}
-              <div className="p-3.5 bg-slate-50 rounded-2xl border border-slate-100 text-[11px] text-slate-600">
-                <p className="font-bold text-slate-800 mb-1 flex items-center gap-1 text-[11px]">
-                  💡 Portal Passcode Reminder:
-                </p>
-                <div className="space-y-1 font-mono text-[10px] bg-white p-2 rounded-lg border border-slate-100">
-                  <div>User ID: <span className="font-bold text-slate-900">admin@rupeestore.com</span></div>
-                  <div>Password: <span className="font-bold text-slate-900">welcomeadmin@55</span></div>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setAdminEmail('admin@rupeestore.com');
-                    setAdminPassword('welcomeadmin@55');
-                    setAdminError('');
-                  }}
-                  className="mt-2 text-[10px] font-bold text-indigo-650 hover:text-indigo-805 hover:underline block cursor-pointer transition-colors"
-                >
-                  ⚡ Autofill Executive Credentials
-                </button>
-              </div>
+
 
               <div className="flex gap-3 pt-2">
                 <button
