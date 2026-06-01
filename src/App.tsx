@@ -5,6 +5,7 @@ import { ProductCard } from './components/ProductCard';
 import { CartModal } from './components/CartModal';
 import { UserDashboard } from './components/UserDashboard';
 import { AdminPanel } from './components/AdminPanel';
+import { BlogView } from './components/BlogView';
 import { ProductDetailsModal } from './components/ProductDetailsModal';
 import { 
   testSupabaseConnection,
@@ -254,7 +255,7 @@ export default function App() {
   };
 
   // UI view controls
-  const [activeUserView, setActiveUserView] = useState<'shop' | 'dashboard'>('shop');
+  const [activeUserView, setActiveUserView] = useState<'shop' | 'dashboard' | 'blog' | 'womens'>('shop');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
   const [maxPrice, setMaxPrice] = useState<number>(1000);
@@ -547,20 +548,14 @@ export default function App() {
           {/* Centered navigation menu list mirroring reference image */}
           <div className="flex flex-wrap items-center justify-center gap-6 text-[11px] font-bold tracking-widest uppercase text-zinc-800 border-y lg:border-y-0 py-2 lg:py-0 border-zinc-100">
             <button 
-              onClick={() => { setActiveUserView('shop'); setSelectedCategory('All'); }}
-              className={`hover:text-zinc-500 transition-colors cursor-pointer ${selectedCategory === 'All' && activeUserView === 'shop' ? 'underline underline-offset-4 decoration-zinc-900 decoration-2' : ''}`}
+              onClick={() => { setActiveUserView('shop'); setSelectedCategory('All'); setSearchQuery(''); setMaxPrice(1000); }}
+              className={`hover:text-zinc-500 transition-colors cursor-pointer ${activeUserView === 'shop' ? 'underline underline-offset-4 decoration-zinc-900 decoration-2' : ''}`}
             >
               Home
             </button>
             <button 
-              onClick={() => { setActiveUserView('shop'); setSelectedCategory('All'); }}
-              className={`hover:text-zinc-500 transition-colors cursor-pointer ${activeUserView === 'shop' ? 'underline underline-offset-4 decoration-zinc-900 decoration-2' : ''}`}
-            >
-              Shop
-            </button>
-            <button 
-              onClick={() => { setActiveUserView('shop'); setSelectedCategory('Jewelry'); }}
-              className={`hover:text-zinc-500 transition-colors cursor-pointer ${selectedCategory === 'Jewelry' ? 'underline underline-offset-4 decoration-zinc-900 decoration-2' : ''}`}
+              onClick={() => { setActiveUserView('womens'); setSelectedCategory('All'); setSearchQuery(''); setMaxPrice(1000); }}
+              className={`hover:text-zinc-500 transition-colors cursor-pointer ${activeUserView === 'womens' ? 'underline underline-offset-4 decoration-zinc-900 decoration-2' : ''}`}
             >
               Womens
             </button>
@@ -580,9 +575,9 @@ export default function App() {
             </button>
             <button 
               onClick={() => {
-                alert("RupeeStore Bulletin: Read our story on sustainable embroidery weavers from regional Himachal & Kutch!");
+                setActiveUserView('blog');
               }}
-              className="hover:text-zinc-500 transition-colors cursor-pointer"
+              className={`hover:text-zinc-500 transition-colors cursor-pointer ${activeUserView === 'blog' ? 'underline underline-offset-4 decoration-zinc-900 decoration-2' : ''}`}
             >
               Blog
             </button>
@@ -720,6 +715,28 @@ export default function App() {
               />
             </div>
 
+          ) : activeUserView === 'blog' ? (
+
+            /* EXQUISITE BLOG VIEW CHRONICLE */
+            <div className="space-y-6">
+              <div className="mb-2 text-left">
+                <button
+                  onClick={() => {
+                    setActiveUserView('shop');
+                    setSelectedCategory('All');
+                  }}
+                  className="text-[10px] tracking-widest text-zinc-500 font-bold uppercase hover:text-zinc-950 flex items-center gap-1 cursor-pointer font-mono"
+                >
+                  ← Return to Storefront catalog
+                </button>
+              </div>
+              <BlogView
+                products={products}
+                onSelectProduct={(p) => setSelectedProduct(p)}
+                onAddToCart={(p) => handleAddToCart(p.id, 1)}
+              />
+            </div>
+
           ) : (
 
             /* SHOP STOREFRONT */
@@ -749,148 +766,167 @@ export default function App() {
                 </div>
               )}
 
-              {/* Curated Interactive Carousel Slider matching the Antom reference image layout */}
-              <div className="relative overflow-hidden bg-zinc-50 border border-zinc-100 min-h-[350px] md:min-h-[420px] flex items-center shadow-xs animate-fade-in">
-                
-                {/* Background Image of active slide */}
-                <div className="absolute inset-0 w-full h-full md:w-2/3 lg:w-1/2 overflow-hidden bg-cover bg-center transition-all duration-700" style={{ backgroundImage: `url(${HERO_SLIDES[carouselIndex].image})` }}>
-                  <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-zinc-50 md:from-transparent"></div>
-                </div>
+              {/* Curated Interactive Carousel and Promo Billboard panels (rendered for Home storefront only) */}
+              {activeUserView === 'shop' ? (
+                <>
+                  {/* Curated Interactive Carousel Slider matching the Antom reference image layout */}
+                  <div className="relative overflow-hidden bg-zinc-50 border border-zinc-100 min-h-[350px] md:min-h-[420px] flex items-center shadow-xs animate-fade-in">
+                    
+                    {/* Background Image of active slide */}
+                    <div className="absolute inset-0 w-full h-full md:w-2/3 lg:w-1/2 overflow-hidden bg-cover bg-center transition-all duration-700" style={{ backgroundImage: `url(${HERO_SLIDES[carouselIndex].image})` }}>
+                      <div className="absolute inset-0 bg-gradient-to-r from-white/10 to-zinc-50 md:from-transparent"></div>
+                    </div>
 
-                {/* Left & Right Custom Chevron Slider Buttons */}
-                <div className="absolute left-4 top-1/2 -translate-y-1/2 z-20">
-                  <button 
-                    onClick={() => setCarouselIndex((prev) => (prev === 0 ? HERO_SLIDES.length - 1 : prev - 1))}
-                    className="w-10 h-10 bg-zinc-950 text-white flex items-center justify-center hover:bg-zinc-800 transition-colors cursor-pointer"
-                    title="Previous Slide"
-                  >
-                    &lt;
-                  </button>
-                </div>
-                <div className="absolute right-4 top-1/2 -translate-y-1/2 z-20">
-                  <button 
-                    onClick={() => setCarouselIndex((prev) => (prev === HERO_SLIDES.length - 1 ? 0 : prev + 1))}
-                    className="w-10 h-10 bg-white border border-zinc-200 text-zinc-900 flex items-center justify-center hover:bg-zinc-100 transition-colors cursor-pointer"
-                    title="Next Slide"
-                  >
-                    &gt;
-                  </button>
-                </div>
+                    {/* Left & Right Custom Chevron Slider Buttons */}
+                    <div className="absolute left-4 top-1/2 -translate-y-1/2 z-20">
+                      <button 
+                        onClick={() => setCarouselIndex((prev) => (prev === 0 ? HERO_SLIDES.length - 1 : prev - 1))}
+                        className="w-10 h-10 bg-zinc-950 text-white flex items-center justify-center hover:bg-zinc-800 transition-colors cursor-pointer"
+                        title="Previous Slide"
+                      >
+                        &lt;
+                      </button>
+                    </div>
+                    <div className="absolute right-4 top-1/2 -translate-y-1/2 z-20">
+                      <button 
+                        onClick={() => setCarouselIndex((prev) => (prev === HERO_SLIDES.length - 1 ? 0 : prev + 1))}
+                        className="w-10 h-10 bg-white border border-zinc-200 text-zinc-900 flex items-center justify-center hover:bg-zinc-100 transition-colors cursor-pointer"
+                        title="Next Slide"
+                      >
+                        &gt;
+                      </button>
+                    </div>
 
-                {/* Typography Information Overlaid of slide on the Right details slot */}
-                <div className="w-full md:w-1/2 ml-auto p-8 md:p-14 md:pr-16 relative z-10 space-y-4 text-left md:block">
-                  <span className="text-zinc-500 font-mono text-xs tracking-widest block font-bold">
-                    {HERO_SLIDES[carouselIndex].tag}
-                  </span>
-                  
-                  <h2 className="text-3xl md:text-5xl font-serif font-medium text-zinc-950 tracking-tight leading-tight lowercase">
-                    {HERO_SLIDES[carouselIndex].title}
-                  </h2>
-                  
-                  <p className="text-zinc-650 text-xs md:text-sm max-w-sm leading-relaxed font-sans font-light">
-                    {HERO_SLIDES[carouselIndex].description}
-                  </p>
-                  
-                  <div className="pt-4">
-                    <button
-                      onClick={() => {
-                        const targetCat = HERO_SLIDES[carouselIndex].categoryFilter;
-                        setSelectedCategory(targetCat);
-                        // Safe scroll focus
-                        const element = document.getElementById('our-products-section');
-                        if (element) {
-                          element.scrollIntoView({ behavior: 'smooth' });
-                        }
-                      }}
-                      className="bg-zinc-950 hover:bg-zinc-850 text-white font-bold uppercase tracking-widest text-[10px] sm:text-xs py-3 px-8 transition-colors cursor-pointer shadow-xs"
-                    >
-                      {HERO_SLIDES[carouselIndex].linkText}
-                    </button>
+                    {/* Typography Information Overlaid of slide on the Right details slot */}
+                    <div className="w-full md:w-1/2 ml-auto p-8 md:p-14 md:pr-16 relative z-10 space-y-4 text-left md:block">
+                      <span className="text-zinc-500 font-mono text-xs tracking-widest block font-bold">
+                        {HERO_SLIDES[carouselIndex].tag}
+                      </span>
+                      
+                      <h2 className="text-3xl md:text-5xl font-serif font-medium text-zinc-950 tracking-tight leading-tight lowercase">
+                        {HERO_SLIDES[carouselIndex].title}
+                      </h2>
+                      
+                      <p className="text-zinc-650 text-xs md:text-sm max-w-sm leading-relaxed font-sans font-light">
+                        {HERO_SLIDES[carouselIndex].description}
+                      </p>
+                      
+                      <div className="pt-4">
+                        <button
+                          onClick={() => {
+                            const targetCat = HERO_SLIDES[carouselIndex].categoryFilter;
+                            setSelectedCategory(targetCat);
+                            // Safe scroll focus
+                            const element = document.getElementById('our-products-section');
+                            if (element) {
+                              element.scrollIntoView({ behavior: 'smooth' });
+                            }
+                          }}
+                          className="bg-zinc-950 hover:bg-zinc-850 text-white font-bold uppercase tracking-widest text-[10px] sm:text-xs py-3 px-8 transition-colors cursor-pointer shadow-xs"
+                        >
+                          {HERO_SLIDES[carouselIndex].linkText}
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Numeric Slide indices dots indicators underneath */}
+                    <div className="absolute bottom-4 right-1/2 translate-x-1/2 flex gap-2 z-20">
+                      {HERO_SLIDES.map((_, idx) => (
+                        <button 
+                          key={idx}
+                          onClick={() => setCarouselIndex(idx)}
+                          className={`w-2.5 h-2.5 rounded-full transition-colors ${carouselIndex === idx ? 'bg-zinc-950' : 'bg-zinc-200'}`}
+                        />
+                      ))}
+                    </div>
                   </div>
-                </div>
 
-                {/* Numeric Slide indices dots indicators underneath */}
-                <div className="absolute bottom-4 right-1/2 translate-x-1/2 flex gap-2 z-20">
-                  {HERO_SLIDES.map((_, idx) => (
-                    <button 
-                      key={idx}
-                      onClick={() => setCarouselIndex(idx)}
-                      className={`w-2.5 h-2.5 rounded-full transition-colors ${carouselIndex === idx ? 'bg-zinc-950' : 'bg-zinc-200'}`}
-                    />
-                  ))}
-                </div>
-              </div>
-
-              {/* Sub-Header text welcoming customer */}
-              <div className="pt-8 text-center">
-                <p className="font-serif italic text-zinc-800 text-[15px] md:text-lg">
-                  Welcome to <span className="font-signature text-2xl md:text-3xl text-zinc-950 not-italic font-semibold mx-1">RupeeStore</span>!
-                </p>
-              </div>
-
-              {/* Three-Column Promotion Banners Grid matching reference layout */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
-                
-                {/* Left Card: model image with white overlaid tag of newdenim */}
-                <div className="relative aspect-square md:aspect-auto md:h-76 overflow-hidden bg-zinc-50 border border-zinc-100 group">
-                  <img 
-                    src="https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=600&auto=format&fit=crop" 
-                    alt="new collection streetwear models" 
-                    referrerPolicy="no-referrer"
-                    className="w-full h-full object-cover object-center transition-transform duration-700 group-hover:scale-105"
-                  />
-                  <div className="absolute inset-0 bg-black/5 opacity-40"></div>
-                  <div className="absolute bottom-6 left-1/2 -translate-x-1/12 transform -translate-x-1/2 z-10">
-                    <span className="bg-white text-zinc-950 text-[10px] font-bold tracking-widest uppercase px-5 py-2 whitespace-nowrap shadow-xs">
-                      #newdenim
-                    </span>
-                  </div>
-                </div>
-
-                {/* Center Column Card: Get 70% voucher code with clean details */}
-                <div className="bg-zinc-50 border border-zinc-100 p-6 md:p-8 flex flex-col justify-center items-center text-center space-y-4 md:h-76">
-                  <div className="space-y-1">
-                    <span className="text-[10px] text-zinc-400 font-mono tracking-widest uppercase block">Exclusive Discount Offer</span>
-                    <h3 className="text-3xl md:text-4xl font-sans font-bold text-zinc-950 tracking-tight">
-                      Get 70%
-                    </h3>
-                    <p className="text-[11px] text-zinc-550 max-w-[200px] leading-relaxed mx-auto">
-                      Classical Latin literature from 45 BC.
+                  {/* Sub-Header text welcoming customer */}
+                  <div className="pt-8 text-center">
+                    <p className="font-serif italic text-zinc-800 text-[15px] md:text-lg">
+                      Welcome to <span className="font-signature text-2xl md:text-3xl text-zinc-950 not-italic font-semibold mx-1">RupeeStore</span>!
                     </p>
                   </div>
-                  
-                  <button 
-                    onClick={() => {
-                      alert("FLASH BOUTIQUE COUPON ACTIVE: Use checkout coupon code 'RUPEE70' to save flat amounts on heritage bundles.");
-                    }}
-                    className="bg-zinc-950 hover:bg-zinc-850 text-white font-bold uppercase tracking-widest text-[10px] py-2.5 px-6 transition-colors cursor-pointer"
-                  >
-                    EXPORE NOW
-                  </button>
-                </div>
 
-                {/* Right Card: lookbook design card with orange style background */}
-                <div className="relative aspect-square md:aspect-auto md:h-76 overflow-hidden bg-zinc-100 border border-zinc-100 group">
-                  <img 
-                    src="https://images.unsplash.com/photo-1529139574466-a303027c1d8b?q=80&w=600&auto=format&fit=crop" 
-                    alt="heritage lookbook designs chic" 
-                    referrerPolicy="no-referrer"
-                    className="w-full h-full object-cover object-center transition-transform duration-700 group-hover:scale-105"
-                  />
-                  <div className="absolute inset-0 bg-amber-500/5 opacity-30"></div>
-                  <div className="absolute bottom-6 left-1/2 -translate-x-1/12 transform -translate-x-1/2 z-10">
-                    <span className="bg-white text-zinc-950 text-[10px] font-bold tracking-widest uppercase px-5 py-2 whitespace-nowrap shadow-xs">
-                      #lookbook19
-                    </span>
+                  {/* Three-Column Promotion Banners Grid matching reference layout */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6 pt-2">
+                    
+                    {/* Left Card: model image with white overlaid tag of newdenim */}
+                    <div className="relative aspect-square md:aspect-auto md:h-76 overflow-hidden bg-zinc-50 border border-zinc-100 group">
+                      <img 
+                        src="https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?q=80&w=600&auto=format&fit=crop" 
+                        alt="new collection streetwear models" 
+                        referrerPolicy="no-referrer"
+                        className="w-full h-full object-cover object-center transition-transform duration-700 group-hover:scale-105"
+                      />
+                      <div className="absolute inset-0 bg-black/5 opacity-40"></div>
+                      <div className="absolute bottom-6 left-1/2 -translate-x-1/12 transform -translate-x-1/2 z-10">
+                        <span className="bg-white text-zinc-950 text-[10px] font-bold tracking-widest uppercase px-5 py-2 whitespace-nowrap shadow-xs">
+                          #newdenim
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Center Column Card: Get 70% voucher code with clean details */}
+                    <div className="bg-zinc-50 border border-zinc-100 p-6 md:p-8 flex flex-col justify-center items-center text-center space-y-4 md:h-76">
+                      <div className="space-y-1">
+                        <span className="text-[10px] text-zinc-400 font-mono tracking-widest uppercase block">Exclusive Discount Offer</span>
+                        <h3 className="text-3xl md:text-4xl font-sans font-bold text-zinc-950 tracking-tight">
+                          Get 70%
+                        </h3>
+                        <p className="text-[11px] text-zinc-550 max-w-[200px] leading-relaxed mx-auto">
+                          Classical Latin literature from 45 BC.
+                        </p>
+                      </div>
+                      
+                      <button 
+                        onClick={() => {
+                          alert("FLASH BOUTIQUE COUPON ACTIVE: Use checkout coupon code 'RUPEE70' to save flat amounts on heritage bundles.");
+                        }}
+                        className="bg-zinc-950 hover:bg-zinc-850 text-white font-bold uppercase tracking-widest text-[10px] py-2.5 px-6 transition-colors cursor-pointer"
+                      >
+                        EXPORE NOW
+                      </button>
+                    </div>
+
+                    {/* Right Card: lookbook design card with orange style background */}
+                    <div className="relative aspect-square md:aspect-auto md:h-76 overflow-hidden bg-zinc-150 border border-zinc-100 group">
+                      <img 
+                        src="https://images.unsplash.com/photo-1529139574466-a303027c1d8b?q=80&w=600&auto=format&fit=crop" 
+                        alt="heritage lookbook designs chic" 
+                        referrerPolicy="no-referrer"
+                        className="w-full h-full object-cover object-center transition-transform duration-700 group-hover:scale-105"
+                      />
+                      <div className="absolute inset-0 bg-amber-500/5 opacity-30"></div>
+                      <div className="absolute bottom-6 left-1/2 -translate-x-1/12 transform -translate-x-1/2 z-10">
+                        <span className="bg-white text-zinc-950 text-[10px] font-bold tracking-widest uppercase px-5 py-2 whitespace-nowrap shadow-xs">
+                          #lookbook19
+                        </span>
+                      </div>
+                    </div>
+
                   </div>
+                </>
+              ) : (
+                /* Specialized Cover Banner for Women's Heritage Page */
+                <div className="bg-zinc-50 border border-zinc-100 p-8 md:p-14 text-center space-y-4 animate-fade-in relative shadow-sm">
+                  <span className="text-[10px] uppercase font-bold tracking-widest text-zinc-400 font-mono block">
+                    elite regional craft & traditional finery
+                  </span>
+                  <h2 className="text-3xl md:text-5xl font-serif text-zinc-950 tracking-tight lowercase">
+                    the premium women's collection
+                  </h2>
+                  <div className="w-12 h-0.5 bg-zinc-950 mx-auto"></div>
+                  <p className="text-zinc-600 text-xs md:text-sm max-w-lg mx-auto leading-relaxed">
+                    A carefully curated gallery of authentic handwoven mulberry silks, kundan meenakari earrings, vintage embroidered clutches, and handcrafted leather flats.
+                  </p>
                 </div>
-
-              </div>
+              )}
 
               {/* OUR PRODUCTS section separator header */}
               <div id="our-products-section" className="text-center pt-8 border-t border-zinc-100">
                 <h3 className="text-zinc-950 text-lg md:text-xl font-bold uppercase tracking-widest font-sans">
-                  OUR PRODUCTS
+                  {activeUserView === 'womens' ? "women's boutique selections" : "OUR PRODUCTS"}
                 </h3>
                 <div className="w-10 h-0.5 bg-zinc-950 mx-auto mt-2.5"></div>
               </div>
