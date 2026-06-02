@@ -1,9 +1,23 @@
 import React, { useState } from 'react';
 import { Product, Order, UserProfile, OrderStatus } from '../types';
 import { 
-  BarChart4, PackagePlus, ClipboardList, Users2, Plus, Edit2, Trash2, 
-  X, Check, RefreshCw, IndianRupee, AlertCircle, ShoppingBag, Eye,
-  Image, Upload, Database, Search
+  LayoutDashboard, 
+  Package, 
+  ShoppingCart, 
+  Users, 
+  Settings as SettingsIcon, 
+  Plus, 
+  Search, 
+  Edit2, 
+  Trash2, 
+  X, 
+  RefreshCw, 
+  IndianRupee, 
+  AlertCircle, 
+  Upload,
+  ArrowUpRight,
+  TrendingUp,
+  Inbox
 } from 'lucide-react';
 
 interface AdminPanelProps {
@@ -20,14 +34,13 @@ interface AdminPanelProps {
   dbState?: { connected: boolean | null; message: string; loading: boolean };
 }
 
-// Preset Luxury Indian Women's Accessories details for fast creation options
-const PREMIUM_ACC_PRESETS = [
+// Elegant Preset Luxury Accessories for rapid additions
+const POPULAR_PRESETS = [
   { name: 'Kundan Jhumka Earrings', url: 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=500&auto=format&fit=crop&q=60', category: 'Jewelry', price: 599, desc: 'Traditionally crafted brass jhumkas featuring colorful meenakari work, premium pearls, and semi-precious kundan stone-work.' },
   { name: 'Handwoven Banarasi Shawl', url: 'https://images.unsplash.com/photo-1610030469983-98e550d6193c?w=500&auto=format&fit=crop&q=60', category: 'Scarves & Shawls', price: 850, desc: 'Luxurious pure silk stole adorned with fine golden zari brocade weave patterns.' },
   { name: 'Embellished Silk Potli Clutch', url: 'https://images.unsplash.com/photo-1544816155-12df9643f363?w=500&auto=format&fit=crop&q=60', category: 'Bags & Clutches', price: 720, desc: 'Elegant drawstring potli bag accented with dazzling golden bead fringes, intricate gota patti embroidery, and pearl tassels.' },
   { name: 'Silver-Plated Ghungroo Payal', url: 'https://images.unsplash.com/photo-1535632066927-ab7c9ab60908?w=500&auto=format&fit=crop&q=60', category: 'Jewelry', price: 540, desc: 'Traditional oxidised silver-plated dual anklets lined with hand-tuned small chiming brass bells (ghungroos).' },
   { name: 'Brass Engraved Cuff Bangle', url: 'https://images.unsplash.com/photo-1611591437281-460bfbe1220a?w=500&auto=format&fit=crop&q=60', category: 'Jewelry', price: 580, desc: 'Open-ended, highly adjustable brass forearm collector cuff deeply engraved with classical patterns.' },
-  { name: 'Floral Threadwork Shoulder Bag', url: 'https://images.unsplash.com/photo-1566150905458-1bf1fc15a4a0?w=500&auto=format&fit=crop&q=60', category: 'Bags & Clutches', price: 899, desc: 'Hard shell rectangular evening clutch featuring dense hand-embroidered floral motifs.' }
 ];
 
 export const AdminPanel: React.FC<AdminPanelProps> = ({
@@ -41,12 +54,21 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
   onUpdateUserProfile,
   onDeleteUserProfile,
   onResetDatabase,
-  dbState,
 }) => {
-  const [activeTab, setActiveTab] = useState<'products' | 'orders' | 'users' | 'analytics' | 'manage-catalog'>('manage-catalog');
-  
-  // Catalog Manager section states
-  const [newProd, setNewProd] = useState({
+  // Navigation Tabs: Dashboard, Products, Orders, Customers, Settings
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'products' | 'orders' | 'customers' | 'settings'>('dashboard');
+
+  // Search filter query inputs
+  const [searchProductQuery, setSearchProductQuery] = useState('');
+  const [searchOrderQuery, setSearchOrderQuery] = useState('');
+  const [searchCustomerQuery, setSearchCustomerQuery] = useState('');
+
+  // Form states
+  const [isAddingProduct, setIsAddingProduct] = useState(false);
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+  const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
+
+  const [productForm, setProductForm] = useState({
     name: '',
     description: '',
     category: 'Jewelry',
@@ -54,53 +76,34 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     stock: 25,
     imageUrl: 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=500&auto=format&fit=crop&q=60'
   });
-  const [newProdError, setNewProdError] = useState('');
-  const [searchCatalogQuery, setSearchCatalogQuery] = useState('');
-  const [selectedCatalogCategory, setSelectedCatalogCategory] = useState('All');
-  const [uploadedFileName, setUploadedFileName] = useState('');
-  const [showDeletionConfirm, setShowDeletionConfirm] = useState<string | null>(null);
 
-  // Product state helper
-  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
-  const [isAddingProduct, setIsAddingProduct] = useState(false);
-  const [prodForm, setProdForm] = useState({
-    name: '',
-    description: '',
-    category: 'Jewelry',
-    price: 650,
-    stock: 20,
-    imageUrl: 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=500&auto=format&fit=crop&q=60'
-  });
-
-  // User edit state helper
-  const [editingUser, setEditingUser] = useState<UserProfile | null>(null);
-
-  // Form error logs
   const [formError, setFormError] = useState('');
+  const [uploadedImageName, setUploadedImageName] = useState('');
 
-  // Settle analytics sums
-  const totalIncome = orders
-    .filter((o) => o.status === 'Delivered')
+  // General settings simulated configurations
+  const [storeName, setStoreName] = useState('RupeeStore');
+  const [storeCurrency, setStoreCurrency] = useState('INR (₹)');
+  const [allowOverStock, setAllowOverStock] = useState(true);
+
+  // Stats
+  const totalProducts = products.length;
+  const totalOrders = orders.length;
+  const pendingOrders = orders.filter(o => o.status === 'Pending').length;
+  const totalUsers = users.length;
+
+  const totalSales = orders
+    .filter(o => o.status === 'Delivered')
     .reduce((sum, o) => sum + o.totalAmount, 0);
 
-  const pendingAmount = orders
-    .filter((o) => o.status !== 'Delivered' && o.status !== 'Cancelled')
-    .reduce((sum, o) => sum + o.totalAmount, 0);
-
-  const jewelryCount = products.filter((p) => p.category === 'Jewelry').length;
-  const scarvesCount = products.filter((p) => p.category === 'Scarves & Shawls').length;
-  const bagsCount = products.filter((p) => p.category === 'Bags & Clutches').length;
-  const hairCount = products.filter((p) => p.category === 'Hair Accessories').length;
-  const footwearCount = products.filter((p) => p.category === 'Footwear').length;
-
+  // Form submit handlers
   const handleProductSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!prodForm.name.trim() || !prodForm.description.trim()) {
+    if (!productForm.name.trim() || !productForm.description.trim()) {
       setFormError('Please enter a valid product name and description.');
       return;
     }
-    if (prodForm.price < 500 || prodForm.price > 1000) {
-      setFormError('Product price MUST be between ₹500 and ₹1000 according to inventory limits.');
+    if (productForm.price < 500 || productForm.price > 1000) {
+      setFormError('Product price must be between ₹500 and ₹1,000 for standard regional catalog parameters.');
       return;
     }
 
@@ -109,88 +112,31 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
     if (editingProduct) {
       onUpdateProduct({
         ...editingProduct,
-        name: prodForm.name,
-        description: prodForm.description,
-        category: prodForm.category,
-        price: prodForm.price,
-        stock: prodForm.stock,
-        imageUrl: prodForm.imageUrl,
+        name: productForm.name.trim(),
+        description: productForm.description.trim(),
+        category: productForm.category,
+        price: Number(productForm.price),
+        stock: Number(productForm.stock),
+        imageUrl: productForm.imageUrl,
       });
       setEditingProduct(null);
     } else {
       const generatedId = `prod-${Date.now().toString().slice(-6)}`;
       onAddProduct({
         id: generatedId,
-        name: prodForm.name,
-        description: prodForm.description,
-        category: prodForm.category,
-        price: Number(prodForm.price),
+        name: productForm.name.trim(),
+        description: productForm.description.trim(),
+        category: productForm.category,
+        price: Number(productForm.price),
         rating: 4.5,
-        stock: Number(prodForm.stock),
-        imageUrl: prodForm.imageUrl,
+        stock: Number(productForm.stock),
+        imageUrl: productForm.imageUrl,
       });
       setIsAddingProduct(false);
     }
 
     // Reset Form
-    setProdForm({
-      name: '',
-      description: '',
-      category: 'Jewelry',
-      price: 650,
-      stock: 20,
-      imageUrl: 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=500&auto=format&fit=crop&q=60'
-    });
-  };
-
-  const startEditProduct = (prod: Product) => {
-    setEditingProduct(prod);
-    setProdForm({
-      name: prod.name,
-      description: prod.description,
-      category: prod.category,
-      price: prod.price,
-      stock: prod.stock,
-      imageUrl: prod.imageUrl,
-    });
-    setFormError('');
-    setIsAddingProduct(false);
-  };
-
-  const handleUserModifySubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (editingUser) {
-      onUpdateUserProfile(editingUser);
-      setEditingUser(null);
-    }
-  };
-
-  const handleAddNewProductCatalog = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newProd.name.trim() || !newProd.description.trim()) {
-      setNewProdError('Please enter a valid product name and description.');
-      return;
-    }
-    if (newProd.price < 500 || newProd.price > 1000) {
-      setNewProdError('Product price MUST be between ₹500 and ₹1,000 according to current store rules.');
-      return;
-    }
-
-    setNewProdError('');
-    const generatedId = `prod-${Date.now().toString().slice(-6)}`;
-    onAddProduct({
-      id: generatedId,
-      name: newProd.name.trim(),
-      description: newProd.description.trim(),
-      category: newProd.category,
-      price: Number(newProd.price),
-      rating: 4.5,
-      stock: Number(newProd.stock),
-      imageUrl: newProd.imageUrl
-    });
-
-    // Reset fields to classic placeholder
-    setNewProd({
+    setProductForm({
       name: '',
       description: '',
       category: 'Jewelry',
@@ -198,267 +144,348 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({
       stock: 25,
       imageUrl: 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=500&auto=format&fit=crop&q=60'
     });
-    setUploadedFileName('');
-    alert('Accessory successfully added to the live catalog!');
+    setUploadedImageName('');
   };
 
-  const handleSelectPreset = (preset: typeof PREMIUM_ACC_PRESETS[0]) => {
-    setNewProd({
+  const handleSelectPreset = (preset: typeof POPULAR_PRESETS[0]) => {
+    setProductForm({
       name: preset.name,
       description: preset.desc,
       category: preset.category,
       price: preset.price,
-      stock: 30,
+      stock: 20,
       imageUrl: preset.url
     });
-    setUploadedFileName('');
-    setNewProdError('');
+    setUploadedImageName('');
+    setFormError('');
   };
 
-  const handleCatalogImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleImageFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
       if (file.size > 2 * 1024 * 1024) {
-        setNewProdError('The selected image is larger than 2MB. Please choose a smaller file.');
+        setFormError('The image is larger than 2MB. Please choose a smaller asset.');
         return;
       }
-      setUploadedFileName(file.name);
+      setUploadedImageName(file.name);
       const reader = new FileReader();
       reader.onloadend = () => {
         if (typeof reader.result === 'string') {
-          setNewProd(prev => ({ ...prev, imageUrl: reader.result }));
-          setNewProdError('');
+          setProductForm(prev => ({ ...prev, imageUrl: reader.result }));
+          setFormError('');
         }
       };
       reader.readAsDataURL(file);
     }
   };
 
+  const handleUserSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (editingUser) {
+      onUpdateUserProfile(editingUser);
+      setEditingUser(null);
+    }
+  };
+
+  const startEditProduct = (p: Product) => {
+    setEditingProduct(p);
+    setProductForm({
+      name: p.name,
+      description: p.description,
+      category: p.category,
+      price: p.price,
+      stock: p.stock,
+      imageUrl: p.imageUrl,
+    });
+    setFormError('');
+    setIsAddingProduct(false);
+  };
+
+  // Nav categories count
+  const jewelryCount = products.filter(p => p.category === 'Jewelry').length;
+  const scarvesCount = products.filter(p => p.category === 'Scarves & Shawls').length;
+  const bagsCount = products.filter(p => p.category === 'Bags & Clutches').length;
+  const hairCount = products.filter(p => p.category === 'Hair Accessories').length;
+
   return (
-    <div className="bg-slate-50 rounded-2xl border border-slate-250 overflow-hidden shadow-xs">
-      {/* Banner */}
-      <div className="bg-gradient-to-r from-slate-900 to-indigo-950 p-6 text-white flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2">
-            <span className="w-2.5 h-2.5 bg-rose-500 rounded-full animate-ping"></span>
-            <span className="text-[10px] bg-red-900/60 text-rose-300 font-bold uppercase tracking-wider px-2 py-0.5 rounded border border-red-700/50">
-              Administrative Console Secure
-            </span>
+    <div className="min-h-screen bg-slate-50/50 text-slate-800 font-sans flex flex-col md:flex-row shadow-sm border border-slate-100 rounded-3xl overflow-hidden">
+      
+      {/* BRAND & NAVIGATION SIDEBAR */}
+      <aside className="w-full md:w-64 bg-white border-r border-slate-200 p-6 flex flex-col justify-between shrink-0">
+        <div className="space-y-8">
+          {/* Top header with logo and store name */}
+          <div className="flex items-center gap-3 px-1">
+            <div className="w-9 h-9 rounded-xl bg-zinc-900 flex items-center justify-center text-white scale-95 shadow-sm">
+              <span className="font-serif font-bold text-lg">R</span>
+            </div>
+            <div>
+              <h2 className="text-sm font-bold tracking-tight text-slate-900 leading-tight">RupeeStore Admin</h2>
+              <span className="text-[10px] uppercase tracking-wider text-slate-400 font-bold block">retail boutique</span>
+            </div>
           </div>
-          <h2 className="text-xl md:text-2xl font-bold font-sans mt-1">Saffron Store Management</h2>
-          <p className="text-slate-400 text-xs font-medium">Control inventory products, update COD orders dispatch, and manage client registry directories.</p>
+
+          {/* Navigation Links */}
+          <nav className="space-y-1">
+            {[
+              { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard },
+              { id: 'products', label: 'Products', icon: Package },
+              { id: 'orders', label: 'Orders', icon: ShoppingCart },
+              { id: 'customers', label: 'Customers', icon: Users },
+              { id: 'settings', label: 'Settings', icon: SettingsIcon }
+            ].map((tab) => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    setActiveTab(tab.id as any);
+                    setIsAddingProduct(false);
+                    setEditingProduct(null);
+                    setEditingUser(null);
+                  }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-xs font-semibold tracking-wide transition-all ${
+                    isActive 
+                      ? 'bg-zinc-900 text-white shadow-xs' 
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-slate-50'
+                  }`}
+                >
+                  <Icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-white' : 'text-slate-400'}`} />
+                  <span>{tab.label}</span>
+                  {tab.id === 'orders' && pendingOrders > 0 && (
+                    <span className="ml-auto w-5 h-5 rounded-full bg-amber-500 text-white font-mono text-[9px] font-bold flex items-center justify-center scale-90">
+                      {pendingOrders}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
+          </nav>
         </div>
 
-        <button
-          onClick={() => {
-            if (window.confirm('WARNING: This will reset all local storage products to original 15, erase orders, and reload defaults. Proceed?')) {
-              onResetDatabase();
-            }
-          }}
-          className="flex items-center gap-1 bg-white/5 hover:bg-white/15 border border-white/10 text-xs font-semibold py-1.5 px-3 rounded-lg transition-colors"
-          title="Reset back to safe defaults"
-        >
-          <RefreshCw className="w-3.5 h-3.5 text-orange-400" />
-          <span>Reset Database</span>
-        </button>
-      </div>
+        {/* Footer info showing standard metadata cleanly */}
+        <div className="pt-6 border-t border-slate-100 px-2 text-[10px] text-slate-400 font-medium">
+          <p className="font-semibold text-slate-500">RupeeStore</p>
+          <p className="mt-0.5">Ready for dispatchers</p>
+        </div>
+      </aside>
 
-      {/* Selector tab controls */}
-      <div className="flex border-b border-slate-200 bg-white overflow-x-auto">
-        <button
-          onClick={() => setActiveTab('manage-catalog')}
-          id="admin-tab-manage-catalog"
-          className={`flex items-center gap-2.5 px-6 py-4 text-xs font-bold whitespace-nowrap transition-all ${
-            activeTab === 'manage-catalog'
-              ? 'text-indigo-600 border-b-2 border-indigo-600 bg-slate-50/50'
-              : 'text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <PackagePlus className="w-4 h-4 text-rose-500 font-bold" /> Add / Remove Cabinet ({products.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('products')}
-          id="admin-tab-products"
-          className={`flex items-center gap-2.5 px-6 py-4 text-xs font-bold whitespace-nowrap transition-all ${
-            activeTab === 'products'
-              ? 'text-indigo-600 border-b-2 border-indigo-600 bg-slate-50/50'
-              : 'text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <Plus className="w-4 h-4 text-emerald-500" /> Products Catalog ({products.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('orders')}
-          id="admin-tab-orders"
-          className={`flex items-center gap-2.5 px-6 py-4 text-xs font-bold whitespace-nowrap transition-all ${
-            activeTab === 'orders'
-              ? 'text-indigo-600 border-b-2 border-indigo-600 bg-slate-50/50'
-              : 'text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <ClipboardList className="w-4 h-4 text-sky-500" /> COD Dispatch ({orders.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('users')}
-          id="admin-tab-users"
-          className={`flex items-center gap-2.5 px-6 py-4 text-xs font-bold whitespace-nowrap transition-all ${
-            activeTab === 'users'
-              ? 'text-indigo-600 border-b-2 border-indigo-600 bg-slate-50/50'
-              : 'text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <Users2 className="w-4 h-4 text-indigo-500" /> Profiles & Users ({users.length})
-        </button>
-        <button
-          onClick={() => setActiveTab('analytics')}
-          id="admin-tab-analytics"
-          className={`flex items-center gap-2.5 px-6 py-4 text-xs font-bold whitespace-nowrap transition-all ${
-            activeTab === 'analytics'
-              ? 'text-indigo-600 border-b-2 border-indigo-600 bg-slate-50/50'
-              : 'text-slate-500 hover:text-slate-800'
-          }`}
-        >
-          <BarChart4 className="w-4 h-4 text-amber-500" /> Store Insights
-        </button>
-      </div>
-
-      <div className="p-6">
-        
-        {/* MANAGE CATALOG / SUPABASE CABINET TAB */}
-        {activeTab === 'manage-catalog' && (
-          <div className="space-y-6">
-            
-            {/* Supabase connection dashboard status */}
-            <div className="bg-slate-900 text-white rounded-2xl p-5 border border-slate-800 shadow-sm animate-fade-in">
-              <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
-                <div>
-                  <div className="flex items-center gap-2">
-                    <Database className="w-5 h-5 text-indigo-400" />
-                    <h3 className="text-sm font-bold uppercase tracking-wider font-mono">Supabase Integration Portal</h3>
-                    {dbState?.connected ? (
-                      <span className="flex items-center gap-1 text-[11px] font-bold text-emerald-400 bg-emerald-900/30 px-2 py-0.5 rounded-full border border-emerald-500/20">
-                        <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
-                        Syncing Live
-                      </span>
-                    ) : (
-                      <span className="flex items-center gap-1 text-[11px] font-bold text-rose-400 bg-rose-900/40 px-2 py-0.5 rounded-full border border-rose-500/20 animate-pulse">
-                        <span className="w-1.5 h-1.5 rounded-full bg-rose-400"></span>
-                        Offline Fallback
-                      </span>
-                    )}
-                  </div>
-                  <p className="text-slate-400 text-xs mt-1 max-w-2xl leading-relaxed">
-                    {dbState?.connected 
-                      ? "Your storefront is securely reading and writing from the live Supabase database. Item changes synchronize instantly across clients." 
-                      : "Currently using client local storage cache as backup. Run the bootstrapping SQL below inside your Supabase dashboard to allow real-time cloud data storage & updates!"}
-                  </p>
-                </div>
-                
-                <div className="flex flex-col gap-1 text-slate-400 text-[11px] font-mono select-all bg-black/40 p-2.5 rounded-xl border border-white/5">
-                  <span className="text-slate-500">API Gateway Endpoint:</span>
-                  <span className="text-indigo-300 font-semibold truncate max-w-[280px]">https://xkqcdntxoblgmphtjefu.supabase.co</span>
-                </div>
+      {/* MAIN VIEW CONTENT CONTAINER */}
+      <main className="flex-1 bg-white p-6 md:p-10 overflow-y-auto">
+        <div className="max-w-6xl mx-auto space-y-8 animate-fade-in">
+          
+          {/* DASHBOARD TAB */}
+          {activeTab === 'dashboard' && (
+            <div className="space-y-8">
+              {/* Header Title section */}
+              <div>
+                <h1 className="text-2xl font-bold font-sans tracking-tight text-slate-900">Store Performance Overview</h1>
+                <p className="text-slate-500 text-xs mt-1">Real-time indicators showing active collections and cash on delivery pipelines.</p>
               </div>
 
-              {/* Show instructions always to help administrative users seed standard models */}
-              <div className="mt-4 pt-4 border-t border-slate-800 space-y-3">
-                <div className="bg-indigo-950/40 p-4 rounded-xl border border-indigo-900/40 text-xs">
-                  <span className="font-bold text-amber-400 block mb-1">🛠️ Copy & Run this SQL inside your Supabase SQL Editor dashboard:</span>
-                  <pre className="text-[10px] text-indigo-200 overflow-x-auto whitespace-pre font-mono p-3 bg-black/50 rounded-lg max-h-[160px] leading-tight select-all">
-{`-- 1. Create Products Table
-CREATE TABLE IF NOT EXISTS products (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  description TEXT NOT NULL,
-  category TEXT NOT NULL,
-  price NUMERIC NOT NULL,
-  rating NUMERIC NOT NULL,
-  stock INTEGER NOT NULL,
-  imageUrl TEXT,
-  image_url TEXT
-);
-
--- 2. Create User Profiles Table
-CREATE TABLE IF NOT EXISTS user_profiles (
-  id TEXT PRIMARY KEY,
-  name TEXT NOT NULL,
-  email TEXT NOT NULL,
-  phone TEXT NOT NULL,
-  address TEXT NOT NULL,
-  registeredDate TEXT,
-  registered_date TEXT
-);
-
--- 3. Create Orders Table
-CREATE TABLE IF NOT EXISTS orders (
-  id TEXT PRIMARY KEY,
-  userId TEXT,
-  user_id TEXT,
-  userEmail TEXT,
-  user_email TEXT,
-  userName TEXT,
-  user_name TEXT,
-  items JSONB NOT NULL,
-  totalAmount NUMERIC,
-  total_amount NUMERIC,
-  shippingAddress TEXT,
-  shipping_address TEXT,
-  contactPhone TEXT,
-  contact_phone TEXT,
-  paymentMethod TEXT,
-  payment_method TEXT,
-  orderDate TEXT,
-  order_date TEXT,
-  status TEXT
-);`}
-                  </pre>
-                  <p className="text-[11px] text-slate-400 mt-2">
-                     This auto-constructs the three tables required so your database can read, write, and safely persist luxury catalog additions instantly!
-                  </p>
+              {/* Four Main Dashboard Cards */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+                
+                {/* Total Products card */}
+                <div className="bg-slate-50/50 p-6 rounded-2xl border border-slate-100 flex flex-col justify-between min-h-[120px] transition-all hover:bg-slate-50">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Products</span>
+                    <Package className="w-5 h-5 text-slate-400" />
+                  </div>
+                  <div className="mt-4">
+                    <span className="text-3xl font-extrabold text-slate-900 font-sans tracking-tight">{totalProducts}</span>
+                    <span className="text-[11px] block text-slate-400 font-medium mt-1">Active live catalog</span>
+                  </div>
                 </div>
+
+                {/* Total Orders card */}
+                <div className="bg-slate-50/50 p-6 rounded-2xl border border-slate-100 flex flex-col justify-between min-h-[120px] transition-all hover:bg-slate-50">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Orders</span>
+                    <ShoppingCart className="w-5 h-5 text-slate-400" />
+                  </div>
+                  <div className="mt-4">
+                    <span className="text-3xl font-extrabold text-slate-900 font-sans tracking-tight">{totalOrders}</span>
+                    <span className="text-[11px] block text-slate-400 font-medium mt-1">Cash on Delivery</span>
+                  </div>
+                </div>
+
+                {/* Pending COD Orders card */}
+                <div className="bg-slate-50/50 p-6 rounded-2xl border border-slate-100 flex flex-col justify-between min-h-[120px] transition-all hover:bg-slate-50">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Pending COD Orders</span>
+                    <div className="w-2.5 h-2.5 rounded-full bg-amber-500" />
+                  </div>
+                  <div className="mt-4">
+                    <span className="text-3xl font-extrabold text-slate-900 font-sans tracking-tight">{pendingOrders}</span>
+                    <span className="text-[11px] block text-slate-400 font-medium mt-1">Awaiting dispatch verification</span>
+                  </div>
+                </div>
+
+                {/* Total Users card */}
+                <div className="bg-slate-50/50 p-6 rounded-2xl border border-slate-100 flex flex-col justify-between min-h-[120px] transition-all hover:bg-slate-50">
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-bold uppercase tracking-wider text-slate-400">Total Users</span>
+                    <Users className="w-5 h-5 text-slate-400" />
+                  </div>
+                  <div className="mt-4">
+                    <span className="text-3xl font-extrabold text-slate-900 font-sans tracking-tight">{totalUsers}</span>
+                    <span className="text-[11px] block text-slate-400 font-medium mt-1">Registered profiles</span>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Secondary Clean Widgets */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8 pt-2">
+                
+                {/* Catalog Breakdown */}
+                <div className="bg-white rounded-2xl border border-slate-100 p-6 space-y-4">
+                  <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Product Categories</h3>
+                  <div className="space-y-4 pt-1">
+                    <div>
+                      <div className="flex justify-between text-xs text-slate-600 mb-1 font-medium">
+                        <span>Jewelry</span>
+                        <span className="font-bold text-slate-900">{jewelryCount} Items</span>
+                      </div>
+                      <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                        <div className="bg-zinc-800 h-full" style={{ width: `${(jewelryCount / (products.length || 1)) * 100}%` }}></div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between text-xs text-slate-600 mb-1 font-medium">
+                        <span>Bags & Clutches</span>
+                        <span className="font-bold text-slate-900">{bagsCount} Items</span>
+                      </div>
+                      <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                        <div className="bg-zinc-800 h-full" style={{ width: `${(bagsCount / (products.length || 1)) * 100}%` }}></div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between text-xs text-slate-600 mb-1 font-medium">
+                        <span>Scarves & Shawls</span>
+                        <span className="font-bold text-slate-900">{scarvesCount} Items</span>
+                      </div>
+                      <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                        <div className="bg-zinc-800 h-full" style={{ width: `${(scarvesCount / (products.length || 1)) * 100}%` }}></div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <div className="flex justify-between text-xs text-slate-600 mb-1 font-medium">
+                        <span>Hair Accessories</span>
+                        <span className="font-bold text-slate-900">{hairCount} Items</span>
+                      </div>
+                      <div className="w-full bg-slate-100 h-1.5 rounded-full overflow-hidden">
+                        <div className="bg-zinc-800 h-full" style={{ width: `${(hairCount / (products.length || 1)) * 100}%` }}></div>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Revenue & Settled statistics widget */}
+                <div className="bg-white rounded-2xl border border-slate-100 p-6 flex flex-col justify-between">
+                  <div>
+                    <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">Settled Sales Revenue</h3>
+                    <p className="text-xs text-slate-450 mt-1">Reflects cash payments received for delivered COD merchandise packages.</p>
+                  </div>
+
+                  <div className="pt-6 pb-2">
+                    <span className="text-[10px] uppercase font-bold text-slate-400 tracking-wider">Accumulated Sum</span>
+                    <div className="flex items-baseline gap-1.5 mt-1.5">
+                      <span className="text-3xl font-extrabold text-emerald-800 font-mono">₹{totalSales.toLocaleString('en-IN')}</span>
+                      <span className="text-xs text-emerald-600 font-semibold flex items-center ">
+                        <TrendingUp className="w-3.5 h-3.5 mr-0.5" /> Checked Out
+                      </span>
+                    </div>
+                  </div>
+
+                  <div className="pt-4 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500 font-medium">
+                    <span>Delivered Orders:</span>
+                    <span className="font-bold text-slate-900 font-mono">{orders.filter(o => o.status === 'Delivered').length} packages</span>
+                  </div>
+                </div>
+
               </div>
             </div>
+          )}
 
-            {/* Split Form & List Workspace Grid */}
-            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+          {/* PRODUCTS MANAGEMENT TAB */}
+          {activeTab === 'products' && (
+            <div className="space-y-6">
               
-              {/* Product Creator left slot */}
-              <div className="lg:col-span-5 bg-white border border-slate-150 p-5 rounded-2xl shadow-xs space-y-4">
+              {/* Product Header Row */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-slate-100 pb-5">
                 <div>
-                  <h3 className="text-sm font-bold text-slate-900 flex items-center gap-1.5 uppercase">
-                    <PackagePlus className="w-4 h-4 text-rose-500" />
-                    Instate Accessories Item
-                  </h3>
-                  <p className="text-slate-500 text-[11px] mt-0.5">Define metadata tags, write description notes, and select/upload gorgeous product graphics.</p>
+                  <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Active Store Catalog</h1>
+                  <p className="text-xs text-slate-500 mt-1">View, adjust state variables, and introduce premium luxury Accessories.</p>
                 </div>
 
-                {newProdError && (
-                  <div className="p-3 bg-rose-50 border border-rose-200 text-rose-800 text-xs rounded-xl flex items-center gap-1.5">
-                    <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
-                    {newProdError}
-                  </div>
+                {!isAddingProduct && !editingProduct && (
+                  <button
+                    onClick={() => {
+                      setIsAddingProduct(true);
+                      setEditingProduct(null);
+                      setFormError('');
+                    }}
+                    className="inline-flex items-center gap-1.5 bg-zinc-900 hover:bg-zinc-855 text-white font-semibold py-2.5 px-4 rounded-xl text-xs transition-shadow shadow-xs cursor-pointer"
+                  >
+                    <Plus className="w-4 h-4" /> Add Product Item
+                  </button>
                 )}
+              </div>
 
-                <form onSubmit={handleAddNewProductCatalog} className="space-y-3.5 text-xs">
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Product Title / Name *</label>
-                    <input
-                      type="text"
-                      value={newProd.name}
-                      onChange={(e) => setNewProd({...newProd, name: e.target.value})}
-                      className="w-full border border-slate-200 rounded-xl px-3 py-2 bg-slate-50/50 focus:bg-white text-xs"
-                      placeholder="e.g. Traditional Fine Kundan Jhumka"
-                      required
-                    />
+              {/* Product Edit / Addition Form container */}
+              {(isAddingProduct || editingProduct) && (
+                <div className="bg-white border border-slate-200 p-6 rounded-2xl shadow-xs space-y-6">
+                  <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+                    <div>
+                      <h3 className="text-sm font-bold text-slate-900 uppercase tracking-wider">
+                        {editingProduct ? 'Modify Product Details' : 'Introduce New Accessory'}
+                      </h3>
+                      <p className="text-[11px] text-slate-400 mt-0.5">Please provide authentic values and attractive marketing descriptors.</p>
+                    </div>
+                    <button
+                      onClick={() => {
+                        setIsAddingProduct(false);
+                        setEditingProduct(null);
+                        setFormError('');
+                      }}
+                      className="p-1 text-slate-400 hover:text-slate-800 transition-colors"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-3">
+                  {formError && (
+                    <div className="p-3 bg-rose-50 border border-rose-150 text-rose-800 text-xs rounded-xl flex items-center gap-2">
+                      <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                      <span>{formError}</span>
+                    </div>
+                  )}
+
+                  <form onSubmit={handleProductSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-5 text-xs">
+                    
                     <div>
-                      <label className="block font-semibold text-slate-700 mb-1">Category *</label>
+                      <label className="block font-bold text-slate-700 uppercase tracking-wider text-[9px] mb-1.5">Product Title / Name *</label>
+                      <input
+                        type="text"
+                        value={productForm.name}
+                        onChange={(e) => setProductForm({...productForm, name: e.target.value})}
+                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 focus:border-zinc-800 focus:ring-0 bg-slate-50/50"
+                        placeholder="e.g. Traditional Fine Kundan Jhumka"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-700 uppercase tracking-wider text-[9px] mb-1.5">Category Group *</label>
                       <select
-                        value={newProd.category}
-                        onChange={(e) => setNewProd({...newProd, category: e.target.value})}
-                        className="w-full border border-slate-200 rounded-xl px-2.5 py-2 bg-slate-50/50 text-xs"
+                        value={productForm.category}
+                        onChange={(e) => setProductForm({...productForm, category: e.target.value})}
+                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 focus:border-zinc-800 focus:ring-0 bg-slate-50/50 font-medium"
                       >
                         <option value="Jewelry">Jewelry</option>
                         <option value="Scarves & Shawls">Scarves & Shawls</option>
@@ -469,796 +496,630 @@ CREATE TABLE IF NOT EXISTS orders (
                     </div>
 
                     <div>
-                      <label className="block font-semibold text-slate-700 mb-1">Initial Stock Units *</label>
+                      <label className="block font-bold text-slate-700 uppercase tracking-wider text-[9px] mb-1.5">Price (Rupees) * (₹500 - ₹1000 limit)</label>
+                      <div className="relative">
+                        <span className="absolute left-3.5 top-2.5 font-bold text-slate-400">₹</span>
+                        <input
+                          type="number"
+                          min={500}
+                          max={1000}
+                          value={productForm.price}
+                          onChange={(e) => setProductForm({...productForm, price: Number(e.target.value)})}
+                          className="w-full border border-slate-200 rounded-xl pl-8 pr-3 py-2.5 font-bold font-mono text-slate-800 focus:border-zinc-800 focus:ring-0 bg-slate-50/50"
+                          placeholder="650"
+                          required
+                        />
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-700 uppercase tracking-wider text-[9px] mb-1.5">Available Stock Units *</label>
                       <input
                         type="number"
-                        min={1}
-                        value={newProd.stock}
-                        onChange={(e) => setNewProd({...newProd, stock: Number(e.target.value)})}
-                        className="w-full border border-slate-200 rounded-xl px-3 py-2 bg-slate-50/50 text-xs font-mono"
+                        min={0}
+                        value={productForm.stock}
+                        onChange={(e) => setProductForm({...productForm, stock: Number(e.target.value)})}
+                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 font-bold font-mono focus:border-zinc-800 focus:ring-0 bg-slate-50/50"
                         required
                       />
                     </div>
-                  </div>
 
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Price (Rupees) * (₹500 - ₹1,000 limits)</label>
-                    <div className="relative">
-                      <span className="absolute left-3.5 top-2 font-bold text-slate-400">₹</span>
-                      <input
-                        type="number"
-                        min={500}
-                        max={1000}
-                        value={newProd.price}
-                        onChange={(e) => setNewProd({...newProd, price: Number(e.target.value)})}
-                        className="w-full border border-slate-200 rounded-xl pl-8 pr-3 py-1.5 bg-slate-50/50 text-xs font-mono font-bold"
-                        required
-                      />
-                    </div>
-                  </div>
-
-                  {/* Image input support - URL AND manual upload */}
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Product Media Graphics *</label>
-                    
-                    {/* Media preview */}
-                    <div className="flex items-center gap-3 bg-slate-50 p-2.5 rounded-xl border border-slate-200 mb-2">
-                       <img 
-                          src={newProd.imageUrl} 
-                          alt="preview" 
-                          className="w-12 h-12 rounded-lg object-cover bg-white border border-slate-200 placeholder" 
-                          referrerPolicy="no-referrer"
-                       />
-                       <div className="text-[10px] leading-snug">
-                         <span className="font-bold text-slate-700 block">Preview Artwork</span>
-                         <span className="text-slate-400 font-mono truncate max-w-[200px] block font-xs">{newProd.imageUrl}</span>
-                       </div>
-                    </div>
-
-                    <div className="space-y-2">
+                    <div className="md:col-span-2">
+                      <label className="block font-bold text-slate-700 uppercase tracking-wider text-[9px] mb-1.5">Product Image Link/URL *</label>
                       <input
                         type="url"
-                        value={newProd.imageUrl}
+                        value={productForm.imageUrl}
                         onChange={(e) => {
-                          setNewProd({...newProd, imageUrl: e.target.value});
-                          setUploadedFileName('');
+                          setProductForm({...productForm, imageUrl: e.target.value});
+                          setUploadedImageName('');
                         }}
-                        className="w-full border border-slate-200 rounded-xl px-3 py-1.5 bg-slate-50/50 text-[11px] font-mono"
-                        placeholder="Provide Unsplash links or custom URL..."
+                        className="w-full border border-slate-200 rounded-xl px-3 py-2.5 font-mono text-[11px] focus:border-zinc-800 focus:ring-0 bg-slate-50/50"
+                        placeholder="https://images.unsplash.com/your-premium-accessory-link"
+                        required
                       />
                       
-                      {/* Drag & Drop style manual upload file button */}
-                      <label className="flex items-center justify-center gap-1.5 bg-indigo-50 border border-dashed border-indigo-200 hover:bg-indigo-100 hover:border-indigo-300 py-2 rounded-xl text-indigo-700 font-semibold cursor-pointer transition-colors text-[11px]">
-                        <Upload className="w-3.5 h-3.5 text-indigo-650" />
-                        <span>{uploadedFileName ? `Loaded: ${uploadedFileName}` : 'Or Choose Local Image File (Auto Base64)'}</span>
-                        <input
-                          type="file"
-                          accept="image/*"
-                          onChange={handleCatalogImageUpload}
-                          className="hidden"
-                        />
-                      </label>
+                      {/* File upload support styled cleanly under the form field */}
+                      <div className="mt-2.5 flex flex-wrap items-center gap-3">
+                        <label className="inline-flex items-center gap-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 text-[10px] font-bold px-3 py-2 rounded-xl border border-slate-200 cursor-pointer transition-colors">
+                          <Upload className="w-3.5 h-3.5 text-slate-500" />
+                          <span>{uploadedImageName ? `Loaded: ${uploadedImageName}` : 'Or Choose Local File'}</span>
+                          <input
+                            type="file"
+                            accept="image/*"
+                            onChange={handleImageFileChange}
+                            className="hidden"
+                          />
+                        </label>
+                        <span className="text-[10px] text-slate-400">Recommended dimension 1:1 square.</span>
+                      </div>
                     </div>
-                  </div>
 
-                  <div>
-                     <label className="block font-semibold text-slate-700 mb-1">Template Presets for Premium Quality:</label>
-                     <div className="grid grid-cols-2 gap-1.5 overflow-y-auto max-h-[140px] pt-1 border border-slate-100 p-2 rounded-xl">
-                       {PREMIUM_ACC_PRESETS.map((p, idx) => (
-                         <button
-                           key={idx}
-                           type="button"
-                           onClick={() => handleSelectPreset(p)}
-                           className="text-[10px] font-medium text-left p-1.5 rounded-lg border border-slate-100 hover:border-indigo-150 hover:bg-indigo-50/20 truncate cursor-pointer text-slate-700"
-                         >
-                           ✨ {p.name}
-                         </button>
-                       ))}
-                     </div>
-                  </div>
-
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Attribution notes / Material description *</label>
-                    <textarea
-                      value={newProd.description}
-                      onChange={(e) => setNewProd({...newProd, description: e.target.value})}
-                      rows={2}
-                      className="w-full border border-slate-200 rounded-xl p-2 bg-slate-50/50 focus:bg-white text-xs text-slate-800 shrink-0"
-                      placeholder="Describe ethnic style origin, material weight detail, pure gold zari brocade, etc..."
-                      required
-                    />
-                  </div>
-
-                  <button
-                    type="submit"
-                    id="add-to-live-cabinet-button"
-                    className="w-full bg-rose-600 hover:bg-rose-700 text-white font-bold py-2.5 rounded-xl transition-all shadow-xs uppercase tracking-wide cursor-pointer"
-                  >
-                    Launch & Sync Item Online
-                  </button>
-                </form>
-              </div>
-
-              {/* Product Cabinet list view right slot */}
-              <div className="lg:col-span-7 space-y-4">
-                
-                {/* Search query bar */}
-                <div className="bg-white p-4 border border-slate-150 rounded-2xl flex flex-col sm:flex-row gap-3 items-center justify-between">
-                  <div className="relative w-full sm:w-64">
-                    <Search className="absolute left-3 top-2.5 w-3.5 h-3.5 text-slate-400" />
-                    <input
-                      type="text"
-                      value={searchCatalogQuery}
-                      onChange={(e) => setSearchCatalogQuery(e.target.value)}
-                      placeholder="Filter active cabinet..."
-                      className="w-full pl-9 pr-3 py-1.5 text-xs border border-slate-200 rounded-xl bg-slate-50/30"
-                    />
-                  </div>
-
-                  <div className="flex gap-1.5 overflow-x-auto w-full sm:w-auto">
-                    {['All', 'Jewelry', 'Scarves & Shawls', 'Bags & Clutches', 'Hair Accessories'].map((cat) => (
-                      <button
-                        key={cat}
-                        onClick={() => setSelectedCatalogCategory(cat)}
-                        className={`px-3 py-1 text-[11px] font-bold rounded-lg shrink-0 transition-colors cursor-pointer ${
-                          selectedCatalogCategory === cat 
-                            ? 'bg-rose-500 text-white' 
-                            : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
-                        }`}
-                      >
-                        {cat}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {/* Grid Cabinet list */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3.5 max-h-[640px] overflow-y-auto pr-1">
-                  {products
-                    .filter(p => {
-                      const matS = p.name.toLowerCase().includes(searchCatalogQuery.toLowerCase()) || p.description.toLowerCase().includes(searchCatalogQuery.toLowerCase());
-                      const matC = selectedCatalogCategory === 'All' || p.category === selectedCatalogCategory;
-                      return matS && matC;
-                    })
-                    .map((p) => (
-                      <div key={p.id} className="bg-white border border-slate-150 p-3.5 rounded-2xl flex gap-3 relative shadow-xs hover:border-slate-350 transition-colors">
-                        <img
-                          src={p.imageUrl}
-                          alt={p.name}
-                          className="w-16 h-16 rounded-xl object-cover border border-slate-100 shrink-0 placeholder bg-slate-50"
-                          referrerPolicy="no-referrer"
-                        />
-                        <div className="text-xs space-y-1 w-full min-w-0 pr-6">
-                          <span className="text-[9px] font-extrabold uppercase tracking-widest text-indigo-500">{p.category}</span>
-                          <h4 className="font-bold text-slate-800 truncate" title={p.name}>{p.name}</h4>
-                          <div className="flex items-center gap-2 font-mono">
-                            <span className="font-extrabold text-emerald-800 text-[13px] font-sans">₹{p.price}</span>
-                            <span className="text-slate-400">•</span>
-                            <span className={`text-[10px] ${p.stock <= 0 ? 'text-rose-600 font-bold' : 'text-slate-500'}`}>{p.stock} Instock</span>
-                          </div>
-                          <p className="text-[10px] text-slate-400 line-clamp-2 leading-relaxed">{p.description}</p>
-                        </div>
-
-                        {/* Revoke / Delete Option */}
-                        <div className="absolute right-3.5 top-3.5 text-xs">
-                          {showDeletionConfirm === p.id ? (
-                            <div className="flex items-center gap-1 bg-rose-50 border border-rose-200 py-1 px-2 rounded-xl animate-fade-in absolute right-0 top-0 whitespace-nowrap z-10 text-[10px]">
-                              <span className="text-rose-750 font-bold">Delete?</span>
-                              <button 
-                                onClick={() => {
-                                  onDeleteProduct(p.id);
-                                  setShowDeletionConfirm(null);
-                                }}
-                                className="bg-rose-600 hover:bg-rose-750 text-white font-bold rounded-lg px-2 py-0.5 shrink-0"
-                              >
-                                Yes
-                              </button>
-                              <button 
-                                onClick={() => setShowDeletionConfirm(null)}
-                                className="bg-white border border-slate-200 text-slate-700 font-bold rounded-lg px-2 py-0.5 shrink-0"
-                              >
-                                No
-                              </button>
-                            </div>
-                          ) : (
+                    {/* Pre-fill Template selector to make management extremely friendly */}
+                    {!editingProduct && (
+                      <div className="md:col-span-2 bg-slate-50 p-4 rounded-xl space-y-2">
+                        <span className="text-[9px] uppercase font-bold tracking-wider text-slate-400 block">Or Pre-fill with Ethnic Presets:</span>
+                        <div className="flex flex-wrap gap-2">
+                          {POPULAR_PRESETS.map((preset, idx) => (
                             <button
-                              onClick={() => setShowDeletionConfirm(p.id)}
-                              id={`revoke-catalog-item-${p.id}`}
-                              className="p-1 px-1.5 border border-slate-250 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-600 rounded-lg flex items-center justify-center text-slate-400 transition-colors cursor-pointer"
-                              title="Delete Item"
+                              key={idx}
+                              type="button"
+                              onClick={() => handleSelectPreset(preset)}
+                              className="text-[10px] px-2.5 py-1.5 rounded-lg font-semibold bg-white hover:bg-zinc-900 hover:text-white border border-slate-200 transition-colors cursor-pointer text-slate-700"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              ✨ {preset.name}
                             </button>
-                          )}
+                          ))}
                         </div>
                       </div>
-                    ))}
-                </div>
+                    )}
 
-              </div>
-
-            </div>
-
-          </div>
-        )}
-
-        {/* ANALYTICS TAB */}
-        {activeTab === 'analytics' && (
-          <div className="space-y-6">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-              
-              <div className="bg-white p-5 border border-slate-150 rounded-2xl flex items-center justify-between shadow-xs">
-                <div>
-                  <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-1">Delivered Revenue</span>
-                  <span className="font-mono text-xl font-extrabold text-emerald-800">₹{totalIncome.toLocaleString('en-IN')}</span>
-                </div>
-                <div className="bg-emerald-50 text-emerald-600 p-2.5 rounded-xl">
-                  <IndianRupee className="w-5 h-5" />
-                </div>
-              </div>
-
-              <div className="bg-white p-5 border border-slate-150 rounded-2xl flex items-center justify-between shadow-xs">
-                <div>
-                  <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-1">Transit / Pending Value</span>
-                  <span className="font-mono text-xl font-extrabold text-indigo-800">₹{pendingAmount.toLocaleString('en-IN')}</span>
-                </div>
-                <div className="bg-indigo-50 text-indigo-600 p-2.5 rounded-xl">
-                  <BarChart4 className="w-5 h-5" />
-                </div>
-              </div>
-
-              <div className="bg-white p-5 border border-slate-150 rounded-2xl flex items-center justify-between shadow-xs">
-                <div>
-                  <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-1">Active Catalog Items</span>
-                  <span className="font-mono text-xl font-extrabold text-slate-800">{products.length} Products</span>
-                </div>
-                <div className="bg-slate-100 text-slate-600 p-2.5 rounded-xl">
-                  <ShoppingBag className="w-5 h-5" />
-                </div>
-              </div>
-
-              <div className="bg-white p-5 border border-slate-150 rounded-2xl flex items-center justify-between shadow-xs">
-                <div>
-                  <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400 block mb-1">Registered Shoppers</span>
-                  <span className="font-mono text-xl font-extrabold text-sky-800">{users.length} shoppers</span>
-                </div>
-                <div className="bg-sky-50 text-sky-600 p-2.5 rounded-xl">
-                  <Users2 className="w-5 h-5" />
-                </div>
-              </div>
-
-            </div>
-
-            {/* Category breakdown bento-grid */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="bg-white p-5 border border-slate-150 rounded-2xl">
-                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">Stock Breakdown by Category</h4>
-                <div className="space-y-3 mt-1.5 text-xs">
-                  <div>
-                    <div className="flex justify-between text-slate-600 mb-1">
-                      <span>Jewelry</span>
-                      <span className="font-bold">{jewelryCount} Products</span>
-                    </div>
-                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                      <div className="bg-indigo-600 h-full" style={{ width: `${(jewelryCount / (products.length || 1)) * 100}%` }}></div>
-                    </div>
-                  </div>
-                  <div>
-                    <div className="flex justify-between text-slate-600 mb-1">
-                      <span>Bags & Clutches</span>
-                      <span className="font-bold">{bagsCount} Products</span>
-                    </div>
-                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                      <div className="bg-emerald-500 h-full" style={{ width: `${(bagsCount / (products.length || 1)) * 100}%` }}></div>
-                    </div>
-                  </div>
-                  <div>
-                    <div className="flex justify-between text-slate-600 mb-1">
-                      <span>Scarves & Shawls</span>
-                      <span className="font-bold">{scarvesCount} Products</span>
-                    </div>
-                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                      <div className="bg-amber-500 h-full" style={{ width: `${(scarvesCount / (products.length || 1)) * 100}%` }}></div>
-                    </div>
-                  </div>
-                  <div>
-                    <div className="flex justify-between text-slate-600 mb-1">
-                      <span>Hair Accessories</span>
-                      <span className="font-bold">{hairCount} Products</span>
-                    </div>
-                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                      <div className="bg-purple-500 h-full" style={{ width: `${(hairCount / (products.length || 1)) * 100}%` }}></div>
-                    </div>
-                  </div>
-                  <div>
-                    <div className="flex justify-between text-slate-600 mb-1">
-                      <span>Footwear</span>
-                      <span className="font-bold">{footwearCount} Products</span>
-                    </div>
-                    <div className="w-full bg-slate-100 h-2 rounded-full overflow-hidden">
-                      <div className="bg-orange-400 h-full" style={{ width: `${(footwearCount / (products.length || 1)) * 100}%` }}></div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              {/* Order statuses review */}
-              <div className="bg-white p-5 border border-slate-150 rounded-2xl flex flex-col justify-between">
-                <h4 className="text-xs font-bold text-slate-400 uppercase tracking-wider mb-4">COD Dispatch Pipeline Ratio</h4>
-                <div className="grid grid-cols-2 gap-3 text-xs">
-                  <div className="border border-slate-100 p-3 rounded-xl bg-orange-50/20 text-center">
-                    <span className="text-amber-600 font-bold block text-lg font-mono">{orders.filter(o => o.status === 'Pending').length}</span>
-                    <span className="text-slate-500 text-[11px]">Pending Approval</span>
-                  </div>
-                  <div className="border border-slate-100 p-3 rounded-xl bg-blue-50/20 text-center">
-                    <span className="text-blue-600 font-bold block text-lg font-mono">{orders.filter(o => o.status === 'Shipped').length}</span>
-                    <span className="text-slate-500 text-[11px]">Shipped / In Transit</span>
-                  </div>
-                  <div className="border border-slate-100 p-3 rounded-xl bg-emerald-50/20 text-center">
-                    <span className="text-emerald-600 font-bold block text-lg font-mono">{orders.filter(o => o.status === 'Delivered').length}</span>
-                    <span className="text-slate-500 text-[11px]">Delivered & Settled</span>
-                  </div>
-                  <div className="border border-slate-100 p-3 rounded-xl bg-rose-50/20 text-center">
-                    <span className="text-rose-600 font-bold block text-lg font-mono">{orders.filter(o => o.status === 'Cancelled').length}</span>
-                    <span className="text-slate-500 text-[11px]">Cancelled</span>
-                  </div>
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* PRODUCTS TAB */}
-        {activeTab === 'products' && (
-          <div className="space-y-6">
-            
-            {/* Control banner */}
-            <div className="flex flex-wrap items-center justify-between gap-4">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400">Inventory Product Rows</h3>
-              
-              {(!isAddingProduct && !editingProduct) && (
-                <button
-                  onClick={() => setIsAddingProduct(true)}
-                  id="admin-add-product-btn"
-                  className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-4 rounded-xl text-xs shadow-xs"
-                >
-                  <Plus className="w-4 h-4" /> Add Product Item
-                </button>
-              )}
-            </div>
-
-            {/* FORM CONTAINER FOR ADD / EDIT */}
-            {(isAddingProduct || editingProduct) && (
-              <div className="bg-white border border-indigo-100 p-5 rounded-2xl shadow-xs space-y-4">
-                <div className="flex items-center justify-between border-b border-indigo-50 pb-3">
-                  <h4 className="text-sm font-bold text-indigo-950 flex items-center gap-1.5">
-                    <PackagePlus className="w-4 h-4 text-indigo-600" />
-                    {editingProduct ? `Modify: "${editingProduct.name}"` : 'Construct New Product'}
-                  </h4>
-                  <button
-                    onClick={() => {
-                      setIsAddingProduct(false);
-                      setEditingProduct(null);
-                    }}
-                    className="p-1 rounded-md text-slate-400 hover:bg-slate-50 hover:text-slate-650"
-                  >
-                    <X className="w-4 w-4" />
-                  </button>
-                </div>
-
-                {formError && (
-                  <div className="bg-rose-50 border border-rose-200 text-rose-800 text-xs p-3 rounded-xl flex items-center gap-1.5">
-                    <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
-                    {formError}
-                  </div>
-                )}
-
-                <form onSubmit={handleProductSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Product Title / Name *</label>
-                    <input
-                      type="text"
-                      value={prodForm.name}
-                      onChange={(e) => setProdForm({...prodForm, name: e.target.value})}
-                      className="w-full border border-slate-200 rounded-xl px-3 py-2 focus:ring-1 focus:ring-indigo-500 bg-white"
-                      placeholder="e.g. Traditional Fine Cotton Stole"
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Category Group *</label>
-                    <select
-                      value={prodForm.category}
-                      onChange={(e) => setProdForm({...prodForm, category: e.target.value})}
-                      className="w-full border border-slate-200 rounded-xl px-3 py-2 focus:ring-1 focus:ring-indigo-500 bg-white"
-                    >
-                      <option value="Jewelry">Jewelry</option>
-                      <option value="Scarves & Shawls">Scarves & Shawls</option>
-                      <option value="Bags & Clutches">Bags & Clutches</option>
-                      <option value="Hair Accessories">Hair Accessories</option>
-                      <option value="Footwear">Footwear</option>
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Price (Rupees)* (Min: 500 - Max: 1000)</label>
-                    <div className="relative">
-                      <span className="absolute left-3.5 top-2.5 font-bold font-sans text-slate-400">₹</span>
-                      <input
-                        type="number"
-                        min={500}
-                        max={1000}
-                        value={prodForm.price}
-                        onChange={(e) => setProdForm({...prodForm, price: Number(e.target.value)})}
-                        className="w-full border border-slate-200 rounded-xl pl-8 pr-3 py-2 font-mono font-bold focus:ring-1 focus:ring-indigo-500 bg-white"
+                    <div className="md:col-span-2">
+                      <label className="block font-bold text-slate-700 uppercase tracking-wider text-[9px] mb-1.5">Product Description (Traditional Attributes) *</label>
+                      <textarea
+                        value={productForm.description}
+                        onChange={(e) => setProductForm({...productForm, description: e.target.value})}
+                        rows={3}
+                        className="w-full border border-slate-200 rounded-xl p-3 focus:border-zinc-800 focus:ring-0 bg-slate-50/50"
+                        placeholder="Write dynamic materials info, traditional embroidery patterns description weight details, design background..."
                         required
                       />
                     </div>
-                  </div>
 
-                  <div>
-                    <label className="block font-semibold text-slate-700 mb-1">Initial Stock Units *</label>
-                    <input
-                      type="number"
-                      min={0}
-                      value={prodForm.stock}
-                      onChange={(e) => setProdForm({...prodForm, stock: Number(e.target.value)})}
-                      className="w-full border border-slate-200 rounded-xl px-3 py-2 font-mono focus:ring-1 focus:ring-indigo-500 bg-white"
-                      required
-                    />
-                  </div>
-
-                  <div className="md:col-span-2">
-                    <label className="block font-semibold text-slate-700 mb-1">Product Image Link/URL *</label>
-                    <input
-                      type="url"
-                      value={prodForm.imageUrl}
-                      onChange={(e) => setProdForm({...prodForm, imageUrl: e.target.value})}
-                      className="w-full border border-slate-200 rounded-xl px-3 py-2 font-mono focus:ring-1 focus:ring-indigo-500 bg-white text-[11px]"
-                      placeholder="https://images.unsplash.com/promo-url-sample"
-                      required
-                    />
-                    <div className="flex gap-2.5 mt-1.5 overflow-x-auto py-1">
-                      <span className="text-[10px] text-slate-400 shrink-0 font-medium py-1">Direct Preset Options:</span>
+                    <div className="md:col-span-2 flex justify-end gap-3 pt-3 border-t border-slate-100">
                       <button
                         type="button"
-                        onClick={() => setProdForm({...prodForm, imageUrl: 'https://images.unsplash.com/photo-1542496658-e33a6d0d50f6?w=500&auto=format&fit=crop&q=60'})}
-                        className="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 px-2.5 py-0.5 rounded-md shrink-0"
+                        onClick={() => {
+                          setIsAddingProduct(false);
+                          setEditingProduct(null);
+                          setFormError('');
+                        }}
+                        className="bg-white hover:bg-slate-50 border border-slate-200 font-bold py-2.5 px-5 rounded-xl transition-all font-sans"
                       >
-                        Elegant Watch
+                        Cancel
                       </button>
                       <button
-                        type="button"
-                        onClick={() => setProdForm({...prodForm, imageUrl: 'https://images.unsplash.com/photo-1583847268964-b28dc8f51f92?w=500&auto=format&fit=crop&q=60'})}
-                        className="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 px-2.5 py-0.5 rounded-md shrink-0"
+                        type="submit"
+                        className="bg-zinc-900 hover:bg-zinc-800 text-white font-bold py-2.5 px-6 rounded-xl transition-all font-sans"
                       >
-                        Indian Ceramic Vases
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setProdForm({...prodForm, imageUrl: 'https://images.unsplash.com/photo-1590244921253-1261a3afbb2a?w=500&auto=format&fit=crop&q=60'})}
-                        className="text-[10px] bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 px-2.5 py-0.5 rounded-md shrink-0"
-                      >
-                        Leather Bags
+                        {editingProduct ? 'Save Product Changes' : 'Publish Product to Store'}
                       </button>
                     </div>
-                  </div>
 
-                  <div className="md:col-span-2">
-                    <label className="block font-semibold text-slate-700 mb-1">Product Description Description *</label>
-                    <textarea
-                      value={prodForm.description}
-                      onChange={(e) => setProdForm({...prodForm, description: e.target.value})}
-                      rows={3}
-                      className="w-full border border-slate-200 rounded-xl p-3 focus:ring-1 focus:ring-indigo-500 bg-white"
-                      placeholder="Describe raw organic design, material attributes, durability details..."
-                      required
-                    />
-                  </div>
+                  </form>
+                </div>
+              )}
 
-                  <div className="md:col-span-2 flex justify-end gap-3 pt-3">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsAddingProduct(false);
-                        setEditingProduct(null);
-                      }}
-                      className="bg-white hover:bg-slate-50 border border-slate-250 font-semibold py-2 px-4 rounded-xl transition-all"
-                    >
-                      Bypass / Cancel
-                    </button>
-                    <button
-                      type="submit"
-                      id="save-product-submit"
-                      className="bg-indigo-600 hover:bg-indigo-700 text-white font-semibold py-2 px-5 rounded-xl transition-all shadow-xs"
-                    >
-                      {editingProduct ? 'Commit Modification' : 'Introduce Product'}
-                    </button>
-                  </div>
-                </form>
+              {/* Simple Controls: Search & Statistics Summary */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="relative w-full sm:w-80">
+                  <Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    value={searchProductQuery}
+                    onChange={(e) => setSearchProductQuery(e.target.value)}
+                    placeholder="Search Products by Name, Category..."
+                    className="w-full pl-9 pr-4 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50/50 focus:bg-white focus:outline-hidden"
+                  />
+                </div>
+                <span className="text-[11px] text-slate-400 font-medium">
+                  Showing {products.filter(p => p.name.toLowerCase().includes(searchProductQuery.toLowerCase()) || p.category.toLowerCase().includes(searchProductQuery.toLowerCase())).length} of {totalProducts} Products
+                </span>
               </div>
-            )}
 
-            {/* PRODUCT GRID TABLE */}
-            <div className="bg-white border border-slate-150 rounded-2xl overflow-hidden shadow-xs">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-xs text-slate-700">
-                  <thead className="bg-slate-50 text-[10px] uppercase font-bold text-slate-500 border-b border-slate-150 tracking-wider">
-                    <tr>
-                      <th className="p-4">Visual</th>
-                      <th className="p-4">Product Details</th>
-                      <th className="p-4">Price (Rupees)</th>
-                      <th className="p-4">In Stock Units</th>
-                      <th className="p-4 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {products.map((p) => (
-                      <tr key={p.id} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="p-4">
-                          <img
-                            src={p.imageUrl}
-                            alt={p.name}
-                            className="w-10 h-10 object-cover rounded-lg border border-slate-100 placeholder bg-slate-50"
-                            referrerPolicy="no-referrer"
-                          />
-                        </td>
-                        <td className="p-4 max-w-[240px]">
-                          <p className="font-semibold text-slate-800 line-clamp-1">{p.name}</p>
-                          <span className="text-[9px] font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded uppercase">
-                            {p.category}
-                          </span>
-                        </td>
-                        <td className="p-4 font-mono font-bold text-slate-900">
-                          ₹{p.price.toLocaleString('en-IN')}
-                        </td>
-                        <td className="p-4">
-                          <span className={`font-mono font-bold ${p.stock <= 0 ? 'text-rose-600' : p.stock < 5 ? 'text-amber-600' : 'text-slate-600'}`}>
-                            {p.stock} units
-                          </span>
-                        </td>
-                        <td className="p-4 text-right">
-                          <div className="flex justify-end gap-2 text-slate-500">
-                            <button
-                              onClick={() => startEditProduct(p)}
-                              id={`edit-product-${p.id}`}
-                              className="p-1 px-2 text-xs bg-slate-50 text-slate-700 hover:bg-slate-100 border border-slate-200 rounded-lg flex items-center gap-1 transition-colors"
-                              title="Edit"
-                            >
-                              <Edit2 className="w-3.5 h-3.5" /> <span>Edit</span>
-                            </button>
-                            <button
-                              onClick={() => {
-                                if (window.confirm(`Are you sure you want to delete product "${p.name}"?`)) {
-                                  onDeleteProduct(p.id);
-                                }
-                              }}
-                              id={`delete-product-${p.id}`}
-                              className="p-1 px-2 text-xs bg-rose-50 text-rose-600 hover:bg-rose-100 border border-rose-200 rounded-lg flex items-center gap-1 transition-colors"
-                              title="Archive Details"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" /> <span>Archive</span>
-                            </button>
-                          </div>
-                        </td>
+              {/* Product List Table */}
+              <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
+                <div className="overflow-x-auto">
+                  <table className="w-full text-left text-xs text-slate-700">
+                    
+                    <thead className="bg-slate-50/70 text-[9px] uppercase font-bold text-slate-400 border-b border-slate-100 tracking-wider">
+                      <tr>
+                        <th className="p-4 w-16">Image</th>
+                        <th className="p-4">Product details</th>
+                        <th className="p-4">Category</th>
+                        <th className="p-4 text-center">In stock</th>
+                        <th className="p-4">Price</th>
+                        <th className="p-4 text-right">Actions</th>
                       </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </div>
-        )}
+                    </thead>
 
-        {/* ORDERS MANAGEMENT TAB */}
-        {activeTab === 'orders' && (
-          <div className="space-y-4">
-            <div className="flex items-center justify-between">
-              <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400">Cash On Delivery Order Registers</h3>
-              <p className="text-[10px] text-slate-400 font-mono">Total placed: {orders.length}</p>
-            </div>
+                    <tbody className="divide-y divide-slate-100">
+                      {products
+                        .filter(p => {
+                          const query = searchProductQuery.toLowerCase();
+                          return p.name.toLowerCase().includes(query) || 
+                                 p.category.toLowerCase().includes(query) || 
+                                 p.description.toLowerCase().includes(query);
+                        })
+                        .map((p) => (
+                          <tr key={p.id} className="hover:bg-slate-50/40 transition-colors">
+                            <td className="p-4">
+                              <img
+                                src={p.imageUrl}
+                                alt={p.name}
+                                className="w-10 h-10 object-cover rounded-lg border border-slate-100 bg-slate-50"
+                                referrerPolicy="no-referrer"
+                              />
+                            </td>
+                            <td className="p-4 max-w-sm">
+                              <span className="font-bold text-slate-900 block truncate" title={p.name}>{p.name}</span>
+                              <span className="text-[10px] text-slate-400 block line-clamp-1 mt-0.5">{p.description}</span>
+                            </td>
+                            <td className="p-4">
+                              <span className="text-[10px] font-bold text-slate-900 bg-slate-100 px-2 py-0.5 rounded-md uppercase">
+                                {p.category}
+                              </span>
+                            </td>
+                            <td className="p-4 text-center font-mono">
+                              <span className={`font-bold ${p.stock <= 0 ? 'text-red-500 font-black' : p.stock < 5 ? 'text-amber-600' : 'text-slate-600'}`}>
+                                {p.stock} units
+                              </span>
+                            </td>
+                            <td className="p-4 font-mono font-bold text-slate-900">
+                              ₹{p.price.toLocaleString('en-IN')}
+                            </td>
+                            <td className="p-4 text-right">
+                              <div className="flex justify-end gap-1.5 text-slate-500">
+                                
+                                <button
+                                  onClick={() => startEditProduct(p)}
+                                  className="p-1 px-2.5 text-[11px] font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
+                                  title="Edit Product Details"
+                                >
+                                  <Edit2 className="w-3 h-3 text-slate-400" />
+                                  <span>Edit</span>
+                                </button>
 
-            {orders.length === 0 ? (
-              <div className="text-center py-12 bg-white rounded-2xl border border-slate-150">
-                <ClipboardList className="w-10 h-10 text-slate-300 mx-auto mb-2" />
-                <p className="text-slate-500 text-xs font-semibold">No active orders placed by consumers.</p>
-              </div>
-            ) : (
-              <div className="space-y-4">
-                {orders.map((o) => (
-                  <div key={o.id} className="bg-white border border-slate-150 rounded-xl overflow-hidden shadow-xs hover:border-slate-350 transition-colors">
-                    {/* Header bar */}
-                    <div className="bg-slate-50 border-b border-slate-150 px-4 py-3 flex flex-wrap items-center justify-between gap-3 text-xs">
-                      <div className="flex items-center gap-3">
-                        <strong className="text-slate-800 font-mono text-[13px]">{o.id}</strong>
-                        <span className="text-slate-400 font-medium">Placed on: {o.orderDate}</span>
-                      </div>
-                      
-                      <div className="flex items-center gap-2">
-                        <span className="text-[10px] text-slate-400 font-semibold uppercase">Live Stage:</span>
-                        <select
-                          value={o.status}
-                          id={`order-status-select-${o.id}`}
-                          onChange={(e) => onUpdateOrderStatus(o.id, e.target.value as OrderStatus)}
-                          className="font-bold border border-slate-200 rounded-lg bg-white p-1 text-[11px] focus:outline-hidden"
-                        >
-                          <option value="Pending">🕒 Pending Decision</option>
-                          <option value="Shipped">🚚 Shipped / In Transit</option>
-                          <option value="Delivered">✅ Delivered & Collected</option>
-                          <option value="Cancelled">❌ Cancelled Order</option>
-                        </select>
-                      </div>
-                    </div>
+                                <button
+                                  onClick={() => {
+                                    if (window.confirm(`Are you sure you want to delete "${p.name}"?`)) {
+                                      onDeleteProduct(p.id);
+                                    }
+                                  }}
+                                  className="p-1 px-2.5 text-[11px] font-bold text-red-600 bg-red-50 hover:bg-red-100 hover:text-red-700 rounded-lg flex items-center gap-1 transition-colors cursor-pointer"
+                                  title="Delete Product"
+                                >
+                                  <Trash2 className="w-3 h-3 text-red-400" />
+                                  <span>Delete</span>
+                                </button>
 
-                    {/* Customer overview */}
-                    <div className="p-4 grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
-                      <div>
-                        <p className="text-[10px] text-slate-450 uppercase font-bold tracking-wider mb-1">Customer Demographic</p>
-                        <p className="font-bold text-slate-800">{o.userName}</p>
-                        <p className="text-slate-500 font-mono">{o.userEmail}</p>
-                        <p className="text-slate-500 font-mono mt-0.5">Phone: {o.contactPhone}</p>
-                      </div>
-
-                      <div>
-                        <p className="text-[10px] text-slate-455 uppercase font-bold tracking-wider mb-1">Shipping Destination</p>
-                        <p className="text-slate-650 leading-relaxed font-normal">{o.shippingAddress}</p>
-                      </div>
-
-                      <div className="md:border-l border-slate-100 md:pl-6 flex flex-col justify-between">
-                        <div>
-                          <p className="text-[10px] text-slate-460 uppercase font-bold tracking-wider mb-1">Financial Receipt</p>
-                          <div className="font-normal font-sans text-slate-500">
-                            {o.items.map((it, idx) => (
-                              <div key={idx} className="flex justify-between items-center text-[11px]">
-                                <span className="truncate max-w-[120px]">{it.name}</span>
-                                <span className="font-mono">{it.quantity}x</span>
                               </div>
-                            ))}
-                          </div>
-                        </div>
+                            </td>
+                          </tr>
+                        ))
+                      }
+                    </tbody>
 
-                        <div className="flex justify-between items-center pt-2.5 mt-2.5 border-t border-dashed border-slate-100">
-                          <span className="font-bold text-slate-700">Total COD Cost:</span>
-                          <span className="font-mono text-[14px] font-black text-emerald-800">₹{o.totalAmount.toLocaleString('en-IN')}</span>
-                        </div>
-                      </div>
+                  </table>
+                </div>
+              </div>
+
+            </div>
+          )}
+
+          {/* ORDERS TAB */}
+          {activeTab === 'orders' && (
+            <div className="space-y-6">
+              
+              {/* Header */}
+              <div className="border-b border-slate-100 pb-5">
+                <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Store Orders Directory</h1>
+                <p className="text-xs text-slate-500 mt-1">Accept, reject, ship, and trace active Cash On Delivery consumer purchases.</p>
+              </div>
+
+              {/* Controls */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="relative w-full sm:w-80">
+                  <Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    value={searchOrderQuery}
+                    onChange={(e) => setSearchOrderQuery(e.target.value)}
+                    placeholder="Search orders by customer or ID..."
+                    className="w-full pl-9 pr-4 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50/50 focus:bg-white focus:outline-hidden"
+                  />
+                </div>
+                <div className="flex gap-2">
+                  <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-3 py-1.5 rounded-full">
+                    Pending: {pendingOrders}
+                  </span>
+                  <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-3 py-1.5 rounded-full">
+                    Total: {totalOrders}
+                  </span>
+                </div>
+              </div>
+
+              {/* Order List Table */}
+              {orders.length === 0 ? (
+                <div className="text-center py-16 bg-slate-50 border border-slate-100 rounded-2xl">
+                  <Inbox className="w-10 h-10 text-slate-300 mx-auto mb-2" />
+                  <p className="text-slate-500 text-xs font-bold">No registered orders received yet.</p>
+                </div>
+              ) : (
+                <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
+                  <div className="overflow-x-auto">
+                    <table className="w-full text-left text-xs text-slate-700">
+                      
+                      <thead className="bg-slate-50/70 text-[9px] uppercase font-bold text-slate-400 border-b border-slate-100 tracking-wider">
+                        <tr>
+                          <th className="p-4">Order Number</th>
+                          <th className="p-4">Customer Name</th>
+                          <th className="p-4">Date</th>
+                          <th className="p-4">Amount</th>
+                          <th className="p-4">Status</th>
+                          <th className="p-4 text-right">Actions</th>
+                        </tr>
+                      </thead>
+
+                      <tbody className="divide-y divide-slate-100">
+                        {orders
+                          .filter(o => {
+                            const query = searchOrderQuery.toLowerCase();
+                            return o.id.toLowerCase().includes(query) || 
+                                   o.userName.toLowerCase().includes(query) || 
+                                   o.userEmail.toLowerCase().includes(query) ||
+                                   o.shippingAddress.toLowerCase().includes(query);
+                          })
+                          .map((o) => (
+                            <tr key={o.id} className="hover:bg-slate-50/40 transition-colors">
+                              <td className="p-4 font-mono font-bold text-slate-900">
+                                {o.id}
+                              </td>
+                              <td className="p-4">
+                                <span className="font-bold text-slate-900 block">{o.userName}</span>
+                                <span className="text-[10px] text-slate-400 block mt-0.5 truncate max-w-[200px]" title={o.shippingAddress}>
+                                  {o.shippingAddress}
+                                </span>
+                              </td>
+                              <td className="p-4 text-slate-500 font-mono text-[11px]">
+                                {o.orderDate}
+                              </td>
+                              <td className="p-4 font-mono font-bold text-emerald-800 text-[13px]">
+                                ₹{o.totalAmount.toLocaleString('en-IN')}
+                              </td>
+                              <td className="p-4">
+                                <span className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[10px] font-bold ${
+                                  o.status === 'Pending' 
+                                    ? 'bg-amber-550/10 text-amber-600' 
+                                    : o.status === 'Shipped' 
+                                      ? 'bg-sky-500/10 text-sky-600' 
+                                      : o.status === 'Delivered' 
+                                        ? 'bg-emerald-500/10 text-emerald-600' 
+                                        : 'bg-red-500/10 text-red-500'
+                                }`}>
+                                  <span className={`w-1.5 h-1.5 rounded-full ${
+                                    o.status === 'Pending' 
+                                      ? 'bg-amber-500' 
+                                      : o.status === 'Shipped' 
+                                        ? 'bg-sky-500' 
+                                        : o.status === 'Delivered' 
+                                          ? 'bg-emerald-500' 
+                                          : 'bg-red-500'
+                                  }`} />
+                                  <span>{o.status}</span>
+                                </span>
+                              </td>
+                              <td className="p-4 text-right">
+                                <div className="flex items-center justify-end gap-2">
+                                  <select
+                                    value={o.status}
+                                    onChange={(e) => onUpdateOrderStatus(o.id, e.target.value as OrderStatus)}
+                                    className="border border-slate-200 rounded-lg px-2 py-1 text-xs font-semibold bg-white cursor-pointer focus:outline-hidden"
+                                  >
+                                    <option value="Pending">🕒 Pending Decision</option>
+                                    <option value="Shipped">🚚 Shipped / In Transit</option>
+                                    <option value="Delivered">✅ Delivered & Settled</option>
+                                    <option value="Cancelled">❌ Cancelled Order</option>
+                                  </select>
+                                </div>
+                              </td>
+                            </tr>
+                          ))
+                        }
+                      </tbody>
+
+                    </table>
+                  </div>
+                </div>
+              )}
+
+            </div>
+          )}
+
+          {/* CUSTOMERS TAB */}
+          {activeTab === 'customers' && (
+            <div className="space-y-6">
+              
+              {/* Header */}
+              <div className="border-b border-slate-100 pb-5">
+                <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Customer Database</h1>
+                <p className="text-xs text-slate-500 mt-1">Manage static subscriber registries, phone contacts, and home shipping locations.</p>
+              </div>
+
+              {/* Customer edit subform */}
+              {editingUser && (
+                <div className="bg-slate-50 border border-slate-200 p-5 rounded-2xl space-y-4">
+                  <div className="flex items-center justify-between border-b border-slate-150 pb-2.5">
+                    <h3 className="text-sm font-bold text-slate-900">Edit Static Shopper Metadata ({editingUser.name})</h3>
+                    <button onClick={() => setEditingUser(null)} className="text-slate-400 hover:text-slate-700">
+                      <X className="w-5 h-5" />
+                    </button>
+                  </div>
+
+                  <form onSubmit={handleUserSubmit} className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs">
+                    <div>
+                      <label className="block font-bold text-[9px] uppercase tracking-wider text-slate-700 mb-1">Customer Full Name</label>
+                      <input
+                        type="text"
+                        value={editingUser.name}
+                        onChange={(e) => setEditingUser({...editingUser, name: e.target.value})}
+                        className="w-full border border-slate-200 rounded-xl px-3 py-2 bg-white"
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-[9px] uppercase tracking-wider text-slate-700 mb-1">Telephone Contact</label>
+                      <input
+                        type="text"
+                        value={editingUser.phone}
+                        onChange={(e) => setEditingUser({...editingUser, phone: e.target.value})}
+                        className="w-full border border-slate-200 rounded-xl px-3 py-2 bg-white"
+                        required
+                      />
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <label className="block font-bold text-[9px] uppercase tracking-wider text-slate-700 mb-1">Permanent Residential Address</label>
+                      <textarea
+                        value={editingUser.address}
+                        onChange={(e) => setEditingUser({...editingUser, address: e.target.value})}
+                        rows={2}
+                        className="w-full border border-slate-200 rounded-xl p-3 bg-white"
+                        required
+                      />
+                    </div>
+
+                    <div className="md:col-span-2 flex justify-end gap-2 border-t border-slate-200/50 pt-3">
+                      <button
+                        type="button"
+                        onClick={() => setEditingUser(null)}
+                        className="bg-white hover:bg-slate-100 border border-slate-200 font-bold py-2 px-4 rounded-xl text-xs transition-colors"
+                      >
+                        Bypass
+                      </button>
+                      <button
+                        type="submit"
+                        className="bg-zinc-900 hover:bg-zinc-800 text-white font-bold py-2 px-5 rounded-xl text-xs transition-shadow shadow-xs"
+                      >
+                        Commit Profile Changes
+                      </button>
+                    </div>
+
+                  </form>
+                </div>
+              )}
+
+              {/* Controls */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="relative w-full sm:w-80">
+                  <Search className="absolute left-3 top-3 w-4 h-4 text-slate-400" />
+                  <input
+                    type="text"
+                    value={searchCustomerQuery}
+                    onChange={(e) => setSearchCustomerQuery(e.target.value)}
+                    placeholder="Search users name, email..."
+                    className="w-full pl-9 pr-4 py-2 text-xs border border-slate-200 rounded-xl bg-slate-50/50 focus:bg-white focus:outline-hidden"
+                  />
+                </div>
+                <span className="text-xs text-slate-400 font-medium font-mono">
+                  Registered profiles Count: {totalUsers}
+                </span>
+              </div>
+
+              {/* Customers list Table */}
+              <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
+                <div className="overflow-x-auto text-xs">
+                  <table className="w-full text-left">
+                    
+                    <thead className="bg-slate-50/70 text-[9px] uppercase font-bold text-slate-400 border-b border-slate-100 tracking-wider">
+                      <tr>
+                        <th className="p-4">Customer Details</th>
+                        <th className="p-4">Contact Telephone</th>
+                        <th className="p-4">Default Registered COD Address</th>
+                        <th className="p-4">Registration Date</th>
+                        <th className="p-4 text-right">Actions</th>
+                      </tr>
+                    </thead>
+
+                    <tbody className="divide-y divide-slate-100">
+                      {users
+                        .filter(u => {
+                          const query = searchCustomerQuery.toLowerCase();
+                          return u.name.toLowerCase().includes(query) || 
+                                 u.email.toLowerCase().includes(query) ||
+                                 u.address.toLowerCase().includes(query);
+                        })
+                        .map((u) => (
+                          <tr key={u.id} className="hover:bg-slate-50/30 transition-colors">
+                            <td className="p-4">
+                              <div className="flex items-center gap-3">
+                                <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-700 uppercase">
+                                  {u.name[0] || 'U'}
+                                </div>
+                                <div>
+                                  <p className="font-bold text-slate-900">{u.name}</p>
+                                  <span className="text-[10px] text-slate-400 font-mono block">{u.email}</span>
+                                </div>
+                              </div>
+                            </td>
+                            <td className="p-4 font-mono font-medium text-slate-700">
+                              {u.phone || 'N/A'}
+                            </td>
+                            <td className="p-4 max-w-[240px] truncate text-slate-600" title={u.address}>
+                              {u.address}
+                            </td>
+                            <td className="p-4 font-mono text-slate-400 text-[11px]">
+                              {u.registeredDate}
+                            </td>
+                            <td className="p-4 text-right">
+                              <div className="flex justify-end gap-1.5">
+                                
+                                <button
+                                  onClick={() => setEditingUser(u)}
+                                  className="p-1 px-3 text-[11px] font-bold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-lg transition-colors cursor-pointer"
+                                  title="Edit Info"
+                                >
+                                  Edit Info
+                                </button>
+
+                                <button
+                                  onClick={() => {
+                                    if (window.confirm(`Are you absolutely sure you want to delete profile registry for "${u.name}"?`)) {
+                                      onDeleteUserProfile(u.id);
+                                    }
+                                  }}
+                                  className="p-1 px-3 text-[11px] font-bold text-red-650 bg-red-50 hover:bg-red-100 rounded-lg transition-colors cursor-pointer"
+                                  title="Delete User"
+                                >
+                                  Revoke
+                                </button>
+
+                              </div>
+                            </td>
+                          </tr>
+                        ))
+                      }
+                    </tbody>
+
+                  </table>
+                </div>
+              </div>
+
+            </div>
+          )}
+
+          {/* SETTINGS TAB */}
+          {activeTab === 'settings' && (
+            <div className="space-y-8">
+              
+              {/* Header */}
+              <div className="border-b border-slate-100 pb-5">
+                <h1 className="text-2xl font-bold text-slate-900 tracking-tight">Boutique Administration Settings</h1>
+                <p className="text-xs text-slate-500 mt-1">Configure workspace rules, default billing currencies, and seed demo databases.</p>
+              </div>
+
+              {/* Simple Settings Form */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                
+                {/* Left block information */}
+                <div className="space-y-2">
+                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-widest">Metadata Values</h3>
+                  <p className="text-xs text-slate-450 leading-relaxed">
+                    General configurations that drive front banner titles, user receipts, and shopping cart validation parameters.
+                  </p>
+                </div>
+
+                {/* Right Form Fields */}
+                <div className="md:col-span-2 bg-white border border-slate-200 p-6 rounded-2xl shadow-xs space-y-5">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+                    <div>
+                      <label className="block font-bold text-slate-700 uppercase tracking-wider text-[9px] mb-1.5">Storefront Name</label>
+                      <input
+                        type="text"
+                        value={storeName}
+                        onChange={(e) => setStoreName(e.target.value)}
+                        className="w-full border border-slate-200 rounded-xl px-3 py-2 bg-slate-50/30"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block font-bold text-slate-700 uppercase tracking-wider text-[9px] mb-1.5">Primary Local Currency</label>
+                      <input
+                        type="text"
+                        value={storeCurrency}
+                        onChange={(e) => setStoreCurrency(e.target.value)}
+                        className="w-full border border-slate-200 rounded-xl px-3 py-2 bg-slate-50/30 font-bold"
+                      />
                     </div>
                   </div>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
 
-        {/* USERS / PROFILES TAB */}
-        {activeTab === 'users' && (
-          <div className="space-y-4">
-            <h3 className="text-sm font-bold uppercase tracking-wider text-slate-400">Consumer Registration Records</h3>
-            
-            {/* User details editing subform */}
-            {editingUser && (
-              <div className="bg-white border border-indigo-100 p-4 rounded-xl shadow-xs space-y-3">
-                <h4 className="text-xs font-bold text-indigo-950 flex items-center justify-between">
-                  <span>Modify User Details for "{editingUser.name}"</span>
-                  <button onClick={() => setEditingUser(null)} className="text-slate-400 hover:text-slate-600">
-                    <X className="w-4 h-4" />
-                  </button>
-                </h4>
-                <form onSubmit={handleUserModifySubmit} className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                  <div className="flex items-center justify-between border-t border-slate-100 pt-4 text-xs">
+                    <div>
+                      <span className="font-bold text-slate-800 block">Enforce strict region pricing limits</span>
+                      <span className="text-slate-400 text-[11px] block mt-0.5">Locks prices of products on addition between ₹500 and ₹1,000.</span>
+                    </div>
+                    <label className="relative inline-flex items-center cursor-pointer select-none">
+                      <input
+                        type="checkbox"
+                        checked={allowOverStock}
+                        onChange={() => setAllowOverStock(!allowOverStock)}
+                        className="sr-only peer"
+                      />
+                      <div className="w-9 h-5 bg-slate-200 peer-focus:outline-hidden rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-slate-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-zinc-900"></div>
+                    </label>
+                  </div>
+                </div>
+
+              </div>
+
+              {/* Reset Data module placed down inside Settings */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-8 pt-6 border-t border-slate-100">
+                <div className="space-y-2">
+                  <h3 className="text-xs font-bold text-slate-900 uppercase tracking-widest">Maintenance Database Portal</h3>
+                  <p className="text-xs text-slate-450 leading-relaxed">
+                    Restore the sandbox client values to original demo defaults. This clears all order sheets and restores default catalogs.
+                  </p>
+                </div>
+
+                <div className="md:col-span-2 bg-white border border-slate-200 p-6 rounded-2xl shadow-xs space-y-4">
                   <div>
-                    <label className="block text-slate-600 mb-0.5">Consumer Name</label>
-                    <input
-                      type="text"
-                      value={editingUser.name}
-                      onChange={(e) => setEditingUser({...editingUser, name: e.target.value})}
-                      className="w-full border border-slate-200 px-2 py-1.5 rounded-lg bg-white"
-                      required
-                    />
+                    <h4 className="text-xs font-bold text-slate-800 uppercase tracking-wider">Database factory defaults reload</h4>
+                    <p className="text-[11px] text-slate-400 mt-0.5">Erases all test client modifications, cleans active customer receipts, and reloads standard products.</p>
                   </div>
-                  <div>
-                    <label className="block text-slate-600 mb-0.5">Contact Phone</label>
-                    <input
-                      type="text"
-                      value={editingUser.phone}
-                      onChange={(e) => setEditingUser({...editingUser, phone: e.target.value})}
-                      className="w-full border border-slate-200 px-2 py-1.5 rounded-lg bg-white"
-                      required
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="block text-slate-600 mb-0.5">Static Shipping Address</label>
-                    <textarea
-                      value={editingUser.address}
-                      onChange={(e) => setEditingUser({...editingUser, address: e.target.value})}
-                      rows={2}
-                      className="w-full border border-slate-200 px-2 py-1.5 rounded-lg bg-white"
-                      required
-                    />
-                  </div>
-                  <div className="md:col-span-2 flex justify-end gap-2.5">
+
+                  <div className="pt-2">
                     <button
-                      type="button"
-                      onClick={() => setEditingUser(null)}
-                      className="bg-white border border-slate-250 py-1 px-3 rounded-lg"
+                      onClick={() => {
+                        if (window.confirm('WARNING: This will reset all local storage products, clear client orders, and reload the default 15 items. Continue?')) {
+                          onResetDatabase();
+                          alert('Database catalog successfully restored to store original template products.');
+                        }
+                      }}
+                      className="inline-flex items-center gap-1.5 bg-red-50 hover:bg-red-100 border border-red-200 text-red-700 text-xs font-bold py-2 px-4 rounded-xl transition-colors cursor-pointer"
                     >
-                      Bypass
-                    </button>
-                    <button
-                      type="submit"
-                      id="save-user-profile"
-                      className="bg-indigo-600 hover:bg-indigo-700 text-white py-1 px-4 rounded-lg font-semibold"
-                    >
-                      Commit Profile Changes
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>Reset Demo Database Catalog</span>
                     </button>
                   </div>
-                </form>
+                </div>
               </div>
-            )}
 
-            <div className="bg-white border border-slate-150 rounded-2xl overflow-hidden shadow-xs">
-              <div className="overflow-x-auto text-xs">
-                <table className="w-full text-left">
-                  <thead className="bg-slate-50 text-[10px] uppercase font-bold text-slate-500 border-b border-slate-150 tracking-wider">
-                    <tr>
-                      <th className="p-4">Customer Details</th>
-                      <th className="p-4">Telephone</th>
-                      <th className="p-4">Default COD Address</th>
-                      <th className="p-4">Join Date</th>
-                      <th className="p-4 text-right">Actions</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {users.map((u) => (
-                      <tr key={u.id} className="hover:bg-slate-50/50 transition-colors">
-                        <td className="p-4">
-                          <div className="flex items-center gap-2">
-                            <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center font-bold text-slate-700 uppercase">
-                              {u.name[0]}
-                            </div>
-                            <div>
-                              <p className="font-semibold text-slate-800">{u.name}</p>
-                              <span className="text-[10px] font-mono text-slate-400 block">{u.email}</span>
-                            </div>
-                          </div>
-                        </td>
-                        <td className="p-4 font-mono">{u.phone || 'N/A'}</td>
-                        <td className="p-4 max-w-[200px] truncate" title={u.address}>
-                          {u.address}
-                        </td>
-                        <td className="p-4 font-mono text-slate-500 text-[11px]">{u.registeredDate}</td>
-                        <td className="p-4 text-right">
-                          <div className="flex justify-end gap-2">
-                            <button
-                              onClick={() => setEditingUser(u)}
-                              id={`edit-user-${u.id}`}
-                              className="p-1 px-2 border border-slate-200 hover:border-slate-350 text-slate-700 rounded-lg bg-white font-medium"
-                            >
-                              Edit Info
-                            </button>
-                            <button
-                              onClick={() => {
-                                if (window.confirm(`Are you absolutely sure you want to delete profile registry for "${u.name}"?`)) {
-                                  onDeleteUserProfile(u.id);
-                                }
-                              }}
-                              id={`delete-user-${u.id}`}
-                              className="p-1 px-2 bg-rose-50 border border-rose-220 text-rose-600 rounded-lg hover:bg-rose-100"
-                            >
-                              Revoke
-                            </button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
             </div>
-          </div>
-        )}
+          )}
 
-      </div>
+        </div>
+      </main>
+
     </div>
   );
 };
